@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
+        android:dialogTitle="@string/pref_dialog_mqtt_user"
+        android:key="@string/mqtt_user"
+        android:summary="@string/pref_message_mqtt_user"
+        android:title="@string/pref_title_mqtt_user" />
+
+    <EditTextPreference
+        android:dialogTitle="@string/pref_dialog_mqtt_pass"
+        android:key="@string/mqtt_pass"
+        android:summary="@string/pref_message_mqtt_pass"
+        android:title="@string/pref_title_mqtt_pass" />
+
+    <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
+        android:dialogTitle="@string/pref_dialog_mqtt_endpoint"
+        android:key="@string/mqtt_endpoint"
+        android:summary="@string/pref_message_mqtt_endpoint"
+        android:title="@string/pref_title_mqtt_endpoint" />
+
+    <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
+        android:dialogTitle="@string/pref_dialog_contact_phone"
+        android:key="@string/contact_phone"
+        android:summary="@string/pref_message_contact_phone"
+        android:title="@string/pref_title_contact_phone" />
+
+    <ListPreference
+        android:dialogTitle="@string/dialog_title_alarm_preference"
+        android:entries="@array/entries_alarm_preference"
+        android:entryValues="@array/entryvalues_alarm_preference"
+        android:key="@string/alarm_model"
+        android:summary="@string/summary_alarm_preference"
+        android:title="@string/title_alarm_preference" />
+
+    <ListPreference
+        android:defaultValue="0"
+        android:entries="@array/pref_options_units"
+        android:entryValues="@array/pref_options_units_values"
+        android:key="@string/preferred_units"
+        android:negativeButtonText="@null"
+        android:positiveButtonText="@null"
+        android:title="@string/pref_title_chart_units_options" />
+
+
+    <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
+        android:dialogTitle="@string/diaglog_simple_alarm_urgent_high"
+        android:key="@string/simple_alarm_urgent_high"
+        android:summary="@string/summary_simple_alarm_urgent_high"
+        android:title="@string/title_simple_alarm_urgent_high" />
+    <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
+        android:dialogTitle="@string/diaglog_simple_alarm_warn_high"
+        android:key="@string/simple_alarm_warn_high"
+        android:summary="@string/summary_simple_alarm_warn_high"
+        android:title="@string/title_simple_alarm_warn_high" />
+    <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
+        android:dialogTitle="@string/diaglog_simple_alarm_warn_low"
+        android:key="@string/simple_alarm_warn_low"
+        android:summary="@string/summary_simple_alarm_warn_low"
+        android:title="@string/title_simple_alarm_warn_low" />
+    <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
+        android:dialogTitle="@string/diaglog_simple_alarm_urgent_low"
+        android:key="@string/simple_alarm_urgent_low"
+        android:summary="@string/summary_simple_alarm_urgent_low"
+        android:title="@string/title_simple_alarm_urgent_low" />
+</PreferenceScreen>
