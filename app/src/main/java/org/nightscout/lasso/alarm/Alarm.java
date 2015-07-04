@@ -21,6 +21,8 @@ import net.tribe7.common.base.Optional;
 import org.joda.time.DateTime;
 import org.joda.time.Instant;
 import org.joda.time.Minutes;
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.nightscout.lasso.BuildConfig;
 import org.nightscout.lasso.MainActivity;
 import org.nightscout.lasso.R;
@@ -119,13 +121,40 @@ public class Alarm {
 
     public void analyze(List<EGVRecord> egvRecords, GlucoseUnit unit, Optional<Integer> uploaderBattery, DateTime downloadTime) {
         alarmResults = new AlarmResults();
-        alarmResults.mergeAlarmResults(analyzeTime(egvRecords, unit, downloadTime));
-        alarmResults.mergeAlarmResults(analyzeBattery(uploaderBattery));
+        // Don't analyze NOOP and Remote alarms.
+        if (preferences.getAlarmStrategy() > 1) {
+            alarmResults.mergeAlarmResults(analyzeTime(egvRecords, unit, downloadTime));
+            alarmResults.mergeAlarmResults(analyzeBattery(uploaderBattery));
+        }
         alarmResults.mergeAlarmResults(strategy.analyze(egvRecords, unit));
     }
 
     public AlarmResults getAlarmResults() {
         return alarmResults;
+    }
+
+    public void clear() {
+        mNotificationManager.cancel(notifyId);
+        stopAlert();
+    }
+
+    public void generateAlarm(JSONObject jsonAlarm) {
+        alarmResults = new AlarmResults();
+        try {
+            alarmResults.severity = AlarmSeverity.NONE;
+            if (jsonAlarm.has("level")) {
+                alarmResults.severity = AlarmSeverity.values()[jsonAlarm.getInt("level") + 3];
+            }
+            if (jsonAlarm.has("title")) {
+                alarmResults.title = jsonAlarm.getString("title");
+            }
+            if (jsonAlarm.has("message")) {
+                alarmResults.message = jsonAlarm.getString("message");
+            }
+            this.alarm();
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
     }
 
     public void alarm() {
@@ -134,7 +163,7 @@ public class Alarm {
             stopAlert();
         }
 
-        if (alarmResults.severity == AlarmSeverity.NONE && !preferences.areAllNotificationsEnabled()) {
+        if (alarmResults.severity.ordinal() <= AlarmSeverity.LOW.ordinal() && !preferences.areAllNotificationsEnabled()) {
             return;
         }
         showNotification(alarmResults.severity, alarmResults.title, alarmResults.message);
@@ -184,8 +213,7 @@ public class Alarm {
                 .setPriority(Notification.PRIORITY_HIGH)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(message))
                 .setSmallIcon(R.drawable.ic_launcher);
-        if (!isSnoozed() && (severity.ordinal() > AlarmSeverity.NONE.ordinal())) {
-            Log.d("alerting", "not vibrating due to snooze");
+        if (!isSnoozed() && (severity.ordinal() >= AlarmSeverity.NORMAL.ordinal())) {
             Intent snoozeIntent = new Intent("org.nightscout.scout.SNOOZE");
             PendingIntent pendingSnooze =
                     PendingIntent.getBroadcast(context, 0, snoozeIntent,
@@ -235,6 +263,9 @@ public class Alarm {
     }
 
     public void alarmSnooze(long durationMs) {
+        if (preferences.getAlarmStrategy() <= 1) {
+            return;
+        }
         String key = "snooze_" + previousAlarmResults.severity.name();
         if (BuildConfig.DEBUG) {
             Log.d("snooze", "Setting snooze until: " + new DateTime().getMillis() + durationMs);

@@ -147,4 +147,7 @@
     <string name="pref_message_contact_phone">Phone number to call/sms</string>
     <string name="pref_dialog_contact_phone">Contact information</string>
     <string name="alarm_out_of_range_message">Out of range for over %d minutes</string>
+    <string name="pref_show_all_notifications">Always on notifications</string>
+    <string name="show_all_notifications_on">Always display notifications</string>
+    <string name="show_all_notifications_off">Only display notifications during alarms</string>
 </resources>

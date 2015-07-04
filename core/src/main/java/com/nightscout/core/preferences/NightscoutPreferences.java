@@ -149,5 +149,5 @@ public interface NightscoutPreferences {
 
     int getUrgentLowThreshold();
 
-    String getAlarmStrategy();
+    Integer getAlarmStrategy();
 }
