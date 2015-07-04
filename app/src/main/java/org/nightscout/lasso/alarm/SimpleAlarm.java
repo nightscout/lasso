@@ -1,6 +1,7 @@
 package org.nightscout.lasso.alarm;
 
 import android.content.Context;
+import android.util.Log;
 
 import com.nightscout.core.dexcom.Constants;
 import com.nightscout.core.dexcom.records.EGVRecord;
@@ -18,6 +19,7 @@ public class SimpleAlarm implements AlarmStrategy {
     private Context context;
 
     public SimpleAlarm(Context context) {
+        Log.d(this.getClass().getSimpleName(), "Initialized");
         this.context = context;
     }
 

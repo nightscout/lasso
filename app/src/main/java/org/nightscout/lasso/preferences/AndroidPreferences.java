@@ -368,8 +368,9 @@ public class AndroidPreferences implements NightscoutPreferences {
     }
 
     @Override
-    public String getAlarmStrategy() {
-        return (preferences.getString(context.getString(R.string.alarm_model), "0").equals("0")) ? "Simple" : "AR2";
+    public Integer getAlarmStrategy() {
+        //        return context.getResources().getStringArray(R.array.entries_alarm_preference)[alarm];
+        return Integer.valueOf(preferences.getString(context.getString(R.string.alarm_model), "0"));
     }
 
     public long getLastRecordTime(String recType, String uploadType) {

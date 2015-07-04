@@ -19,6 +19,20 @@
         android:summary="@string/pref_message_mqtt_endpoint"
         android:title="@string/pref_title_mqtt_endpoint" />
 
+    <SwitchPreference
+        android:defaultValue="false"
+        android:key="@string/show_all_notifications_enabled"
+        android:summaryOff="@string/show_all_notifications_off"
+        android:summaryOn="@string/show_all_notifications_on"
+        android:title="@string/pref_show_all_notifications" />
+
+    <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
+        android:dialogMessage="@string/pref_message_api_url"
+        android:dialogTitle="@string/pref_dialog_api_url"
+        android:hint="@string/pref_default_api_url"
+        android:key="@string/rest_uris"
+        android:title="@string/pref_title_api_url" />
+
     <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
         android:dialogTitle="@string/pref_dialog_contact_phone"
         android:key="@string/contact_phone"

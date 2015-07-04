@@ -1,0 +1,45 @@
+language: android
+
+jdk:
+  - oraclejdk7
+
+env:
+  matrix:
+    - ANDROID_TARGET=android-19  ANDROID_ABI=armeabi-v7a
+
+cache:
+  directories:
+    - $HOME/.gradle
+
+android:
+  components:
+  - build-tools-21.1.1
+  - android-19
+  - sysimg-19
+  - extra-android-support
+
+  licenses:
+  - android-sdk-license-5be876d5
+  - ".*intel.+"
+
+script:
+  - TERM=dumb ./gradlew clean lint test jacocoTestReport
+
+deploy:
+  provider: releases
+  file: "./app/build/outputs/apk/app-debug.apk"
+  skip_cleanup: true
+  api_key:
+    secure: Yv7qc91hNpvFZVjnl1fjA53SfH5kXyJPCabR6IIz2SbExDpstxStSQiUZydIgwrwtXtxliG8irhBdQSfYoYrHREbIZBCX0RkY1QxFpI7r3eLwIUW3SDjfvmbU7HwtYqHqG5gpr1qe81PEj5gFi49YsJYODw9WyaYiRqgE3JFUTs=
+  on:
+    repo: nightscout/lasso
+    tags: true
+    all_branches: true
+
+before_install:
+  - sudo pip install codecov
+
+after_success:
+  - cp app/build/jacoco/jacocoTestReport/*.xml jacoco.xml
+  - cp app/build/jacoco/jacocoTestReport/*.xml jacoco2.xml
+  - codecov

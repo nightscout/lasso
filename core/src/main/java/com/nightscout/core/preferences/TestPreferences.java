@@ -382,8 +382,8 @@ public class TestPreferences implements NightscoutPreferences {
     }
 
     @Override
-    public String getAlarmStrategy() {
-        return "";
+    public Integer getAlarmStrategy() {
+        return 0;
     }
 
     private void setLastBaseUpload(long value, String postfix, String recordType) {

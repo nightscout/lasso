@@ -29,6 +29,7 @@ public class Ar2 implements AlarmStrategy {
 
     public Ar2(Context context) {
         this.context = context;
+        Log.d(this.getClass().getSimpleName(), "Initialized");
     }
 
     private Ar2Result forecast(List<EGVRecord> sgvs) {

@@ -23,19 +23,34 @@ public class AlarmStrategyModule {
         this.context = context;
     }
 
+//    Remote = 0
+//    None = 1
+//    Simple = 2
+//    AR2 = 3
+
+
     @Provides
     @Singleton
     AlarmStrategy provideAlarmStrategy() {
         NightscoutPreferences preferences = new AndroidPreferences(context);
         AlarmStrategy strategy;
-        if (preferences.getAlarmStrategy().equals("Simple")) {
-            strategy = new SimpleAlarm(context);
-            ((SimpleAlarm) strategy).setUrgentHighThreshold(preferences.getUrgentHighThreshold());
-            ((SimpleAlarm) strategy).setWarningHighThreshold(preferences.getWarningHighThreshold());
-            ((SimpleAlarm) strategy).setUrgentLowThreshold(preferences.getUrgentLowThreshold());
-            ((SimpleAlarm) strategy).setWarningLowThreshold(preferences.getWarningLowThreshold());
-        } else {
-            strategy = new Ar2(context);
+        switch (preferences.getAlarmStrategy()) {
+            case 0:
+            case 1:
+                strategy = new NoopAlarm();
+                break;
+            case 2:
+                strategy = new SimpleAlarm(context);
+                ((SimpleAlarm) strategy).setUrgentHighThreshold(preferences.getUrgentHighThreshold());
+                ((SimpleAlarm) strategy).setWarningHighThreshold(preferences.getWarningHighThreshold());
+                ((SimpleAlarm) strategy).setUrgentLowThreshold(preferences.getUrgentLowThreshold());
+                ((SimpleAlarm) strategy).setWarningLowThreshold(preferences.getWarningLowThreshold());
+                break;
+            case 3:
+                strategy = new Ar2(context);
+                break;
+            default:
+                strategy = new NoopAlarm();
         }
         return strategy;
     }

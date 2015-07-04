@@ -31,10 +31,15 @@ import com.nightscout.core.mqtt.MqttTimer;
 import com.nightscout.core.preferences.NightscoutPreferences;
 import com.nightscout.core.utils.GlucoseReading;
 import com.nightscout.core.utils.IsigReading;
+import com.nightscout.core.utils.RestUriUtils;
 import com.squareup.wire.Wire;
 
 import net.tribe7.common.base.Optional;
 
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.DefaultHttpClient;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
@@ -44,6 +49,8 @@ import org.joda.time.DateTime;
 import org.joda.time.Minutes;
 import org.joda.time.Seconds;
 import org.joda.time.format.ISODateTimeFormat;
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.nightscout.lasso.alarm.Alarm;
 import org.nightscout.lasso.events.AndroidEventReporter;
 import org.nightscout.lasso.model.CalibrationDbEntry;
@@ -56,6 +63,7 @@ import org.nightscout.lasso.mqtt.AndroidMqttTimer;
 import org.nightscout.lasso.preferences.AndroidPreferences;
 
 import java.io.IOException;
+import java.net.URI;
 import java.text.DecimalFormat;
 import java.util.List;
 
@@ -77,8 +85,15 @@ public class NightscoutMonitor extends Service implements MqttMgrObserver {
         @Override
         public void onReceive(Context context, Intent intent) {
             if (intent.getAction().equals(SNOOZE_INTENT)) {
-                alarm.alarmSnooze(Minutes.minutes(30).toStandardDuration().getMillis());
-                Log.w(TAG, "Snoozing per request");
+                if (preferences.getAlarmStrategy() == 0) {
+                    for (String url : preferences.getRestApiBaseUris()) {
+                        ackAlarm(url);
+                    }
+
+                } else {
+                    Log.w(TAG, "Snoozing per request");
+                    alarm.alarmSnooze(Minutes.minutes(30).toStandardDuration().getMillis());
+                }
             } else if (intent.getAction().equals(MQTT_QUERY_STATUS_INTENT)) {
                 Intent responseIntent = new Intent(MQTT_RESPONSE_STATUS_INTENT);
                 responseIntent.putExtra(MQTT_STATUS_EXTRA_FIELD, mqttManager.isConnected());
@@ -88,6 +103,34 @@ public class NightscoutMonitor extends Service implements MqttMgrObserver {
     };
 
     public NightscoutMonitor() {
+    }
+
+    public void ackAlarm(final String uriStr) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                Integer level = alarm.getAlarmResults().severity.ordinal() - 3;
+                URI uri = URI.create(uriStr + "/notifications/ack?level=" + level);
+                Log.w(TAG, "Sending snooze command to " + uri.toString() + "/notifications/ack?level=" + level + "&time=" + 15000);
+                String url = RestUriUtils.removeToken(uri).toString();
+                Log.w(TAG, "URL: " + url);
+                String secret = RestUriUtils.generateSecret(uri.getUserInfo());
+                HttpGet httpGet = new HttpGet(url);
+                httpGet.addHeader("Content-Type", "application/json");
+                httpGet.addHeader("Accept", "application/json");
+                Log.d(TAG, "Secret: " + secret);
+                httpGet.setHeader("api-secret", secret);
+                HttpClient client = new DefaultHttpClient();
+                HttpResponse response = null;
+                try {
+                    response = client.execute(httpGet);
+                    Log.d(TAG, "Response code: " + response.getStatusLine().getStatusCode());
+                    Log.d(TAG, "Response: " + response.getEntity().getContent().read());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
     }
 
     @Override
@@ -102,6 +145,10 @@ public class NightscoutMonitor extends Service implements MqttMgrObserver {
         if (mqttManager != null) {
             mqttManager.registerObserver(this);
             mqttManager.subscribe(2, "/downloads/protobuf");
+            if (preferences.getAlarmStrategy() == 0) {
+                Log.d(TAG, "Subscribing to notifications");
+                mqttManager.subscribe(2, "/notifications/json");
+            }
         }
         getApplicationContext().registerReceiver(broadcastReceiver, new IntentFilter(SNOOZE_INTENT));
         alarm = new Alarm(getApplicationContext());
@@ -165,67 +212,82 @@ public class NightscoutMonitor extends Service implements MqttMgrObserver {
 
     @Override
     public void onMessage(String topic, MqttMessage message) {
-        messageCount += 1;
-        Wire wire = new Wire();
-        try {
-            Download download = wire.parseFrom(message.getPayload(), Download.class);
-            if (download.receiver_state != null) {
-                Intent intent = new Intent(RECEIVER_STATE_INTENT);
-                intent.putExtra("state", download.receiver_state.event.name());
-                LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
+        if (topic.equals("/notifications/json")) {
+            JSONObject reader = null;
+            try {
+                reader = new JSONObject(new String(message.getPayload()));
+                if (reader.has("clear") && reader.getBoolean("clear")) {
+                    alarm.clear();
+                }
+                if (reader.has("level") && reader.has("title") && reader.has("message")) {
+                    alarm.generateAlarm(reader);
+                }
+            } catch (JSONException e) {
+                e.printStackTrace();
             }
+        } else if (topic.equals("/downloads/protobuf")) {
+            messageCount += 1;
+            Wire wire = new Wire();
+            try {
+                Download download = wire.parseFrom(message.getPayload(), Download.class);
+                if (download.receiver_state != null) {
+                    Intent intent = new Intent(RECEIVER_STATE_INTENT);
+                    intent.putExtra("state", download.receiver_state.event.name());
+                    LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
+                }
 
-            Log.d(TAG, "Msg #" + messageCount);
+                Log.d(TAG, "Msg #" + messageCount);
 
-            saveToDb(download);
+                saveToDb(download);
 
-            NightscoutPreferences preferences = new AndroidPreferences(getApplicationContext());
-            List<EGVRecord> egvRecords = SgvDbEntry.getLastEgvRecords(new DateTime().minus(Minutes.minutes(90)));
-            Log.d(TAG, "Analyzing message #" + messageCount);
-            DateTime dlTimestamp = ISODateTimeFormat.dateTime().parseDateTime(download.download_timestamp);
-            alarm.analyze(egvRecords, preferences.getPreferredUnits(), Optional.fromNullable(download.uploader_battery), dlTimestamp);
-            alarm.alarm();
+                NightscoutPreferences preferences = new AndroidPreferences(getApplicationContext());
+                List<EGVRecord> egvRecords = SgvDbEntry.getLastEgvRecords(new DateTime().minus(Minutes.minutes(90)));
+                Log.d(TAG, "Analyzing message #" + messageCount);
+                DateTime dlTimestamp = ISODateTimeFormat.dateTime().parseDateTime(download.download_timestamp);
+                alarm.analyze(egvRecords, preferences.getPreferredUnits(), Optional.fromNullable(download.uploader_battery), dlTimestamp);
+                alarm.alarm();
 
-            Log.e(TAG, "New reading came in - EGV: " + egvRecords.get(egvRecords.size() - 1).getBgMgdl() + ". Reading taken at: " + egvRecords.get(egvRecords.size() - 1).getWallTime());
+                Log.e(TAG, "New reading came in - EGV: " + egvRecords.get(egvRecords.size() - 1).getBgMgdl() + ". Reading taken at: " + egvRecords.get(egvRecords.size() - 1).getWallTime());
 
-            String delta = "None";
-            if (egvRecords.size() > 2) {
-                GlucoseReading glucoseDelta = egvRecords.get(egvRecords.size() - 1).getReading().subtract(egvRecords.get(egvRecords.size() - 2).getReading());
-                DecimalFormat fmt;
-                if (preferences.getPreferredUnits() == GlucoseUnit.MGDL) {
-                    fmt = new DecimalFormat("+#,##0;-#");
+                String delta = "None";
+                if (egvRecords.size() > 2) {
+                    GlucoseReading glucoseDelta = egvRecords.get(egvRecords.size() - 1).getReading().subtract(egvRecords.get(egvRecords.size() - 2).getReading());
+                    DecimalFormat fmt;
+                    if (preferences.getPreferredUnits() == GlucoseUnit.MGDL) {
+                        fmt = new DecimalFormat("+#,##0;-#");
+                    } else {
+                        fmt = new DecimalFormat("+#,##0.0;-#");
+                    }
+                    if (egvRecords.get(egvRecords.size() - 2).getReading().asMgdl() > 38 && egvRecords.get(egvRecords.size() - 2).getReading().asMgdl() > 38) {
+                        delta = fmt.format(glucoseDelta.as(preferences.getPreferredUnits()));
+                    }
+                }
+
+                Optional<CalRecord> lastCal = CalibrationDbEntry.getLastCal();
+                Optional<SensorRecord> lastSensor = SensorDbEntry.getLastSensor();
+                EGVRecord lastEgv = egvRecords.get(egvRecords.size() - 1);
+                IsigReading isigReading = new IsigReading();
+                if (lastCal.isPresent() && lastSensor.isPresent() && Math.abs(lastEgv.getSystemTime().getMillis() - lastSensor.get().getSystemTime().getMillis()) < Seconds.seconds(10).toStandardDuration().getMillis()) {
+                    isigReading = new IsigReading(lastSensor.get(), lastCal.get(), egvRecords.get(egvRecords.size() - 1));
+                    Log.e("isig", "iSig reading: " + isigReading.asMgdlStr());
                 } else {
-                    fmt = new DecimalFormat("+#,##0.0;-#");
+                    Log.w("isig", "Problem matching sensor to egv for isig calculation");
+                    Log.w("isig", "Last egv: " + lastEgv.getSystemTime().getMillis());
+                    Log.w("isig", "Last sensor: " + lastSensor.get().getSystemTime().getMillis());
                 }
-                if (egvRecords.get(egvRecords.size() - 2).getReading().asMgdl() > 38 && egvRecords.get(egvRecords.size() - 2).getReading().asMgdl() > 38) {
-                    delta = fmt.format(glucoseDelta.as(preferences.getPreferredUnits()));
-                }
+                WatchMaker.sendReadings(egvRecords.get(egvRecords.size() - 1), egvRecords.get(egvRecords.size() - 1).getNoiseMode(), isigReading, preferences.getPreferredUnits(), delta, uploaderBattery.or(-1), Optional.fromNullable(download.receiver_battery).or(-1), getApplicationContext());
+
+
+                Intent intent = new Intent(NEW_READING_ACTION);
+                Log.d(TAG, "Msg #" + messageCount + " - Battery: " + download.uploader_battery);
+                intent.putExtra("uploaderBattery", download.uploader_battery);
+                Log.d(TAG, "Msg #" + messageCount + " - Receiver: " + download.receiver_battery);
+
+                LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-
-            Optional<CalRecord> lastCal = CalibrationDbEntry.getLastCal();
-            Optional<SensorRecord> lastSensor = SensorDbEntry.getLastSensor();
-            EGVRecord lastEgv = egvRecords.get(egvRecords.size() - 1);
-            IsigReading isigReading = new IsigReading();
-            if (lastCal.isPresent() && lastSensor.isPresent() && Math.abs(lastEgv.getSystemTime().getMillis() - lastSensor.get().getSystemTime().getMillis()) < Seconds.seconds(10).toStandardDuration().getMillis()) {
-                isigReading = new IsigReading(lastSensor.get(), lastCal.get(), egvRecords.get(egvRecords.size() - 1));
-                Log.e("isig", "iSig reading: " + isigReading.asMgdlStr());
-            } else {
-                Log.w("isig", "Problem matching sensor to egv for isig calculation");
-                Log.w("isig", "Last egv: " + lastEgv.getSystemTime().getMillis());
-                Log.w("isig", "Last sensor: " + lastSensor.get().getSystemTime().getMillis());
-            }
-            WatchMaker.sendReadings(egvRecords.get(egvRecords.size() - 1), egvRecords.get(egvRecords.size() - 1).getNoiseMode(), isigReading, preferences.getPreferredUnits(), delta, uploaderBattery.or(-1), Optional.fromNullable(download.receiver_battery).or(-1), getApplicationContext());
-
-
-            Intent intent = new Intent(NEW_READING_ACTION);
-            Log.d(TAG, "Msg #" + messageCount + " - Battery: " + download.uploader_battery);
-            intent.putExtra("uploaderBattery", download.uploader_battery);
-            Log.d(TAG, "Msg #" + messageCount + " - Receiver: " + download.receiver_battery);
-
-            LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
-
-        } catch (IOException e) {
-            e.printStackTrace();
         }
     }
 
