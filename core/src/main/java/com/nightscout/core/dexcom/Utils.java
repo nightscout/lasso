@@ -2,6 +2,7 @@ package com.nightscout.core.dexcom;
 
 import com.nightscout.core.dexcom.records.GlucoseDataSet;
 import com.nightscout.core.model.Download;
+import com.nightscout.core.model.GlucoseUnit;
 import com.nightscout.core.model.SensorEntry;
 import com.nightscout.core.model.SensorGlucoseValueEntry;
 import com.squareup.wire.Message;
@@ -143,5 +144,9 @@ public final class Utils {
             return "";
         }
         return HashCode.fromBytes(bytes).toString().toUpperCase();
+    }
+
+    public static String unitString(GlucoseUnit unit) {
+        return (unit == GlucoseUnit.MGDL) ? "mg/dL" : "mmoL";
     }
 }

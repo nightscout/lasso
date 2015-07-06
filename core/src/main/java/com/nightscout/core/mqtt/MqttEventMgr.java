@@ -150,6 +150,7 @@ public class MqttEventMgr implements MqttCallback, MqttPingerObserver, MqttMgrOb
             log.info(messages.getString("mqtt_close"));
             reporter.report(EventType.UPLOADER, EventSeverity.INFO,
                     messages.getString("mqtt_close"));
+            notifyOnDisconnect();
         } catch (MqttException e) {
             // TODO: determine how to handle this. Cruton maybe?
             log.info(messages.getString("mqtt_close_fail"));
@@ -246,6 +247,16 @@ public class MqttEventMgr implements MqttCallback, MqttPingerObserver, MqttMgrOb
                     this.delayedReconnect();
                     willReconnect = true;
                 }
+            }
+        }
+    }
+
+    public void unSubscribe(String... topics) {
+        for (String topic : topics) {
+            try {
+                client.unsubscribe(topic);
+            } catch (MqttException e) {
+                e.printStackTrace();
             }
         }
     }

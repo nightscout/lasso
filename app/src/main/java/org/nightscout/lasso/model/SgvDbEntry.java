@@ -11,6 +11,7 @@ import com.nightscout.core.model.G4Noise;
 import net.tribe7.common.base.Optional;
 
 import org.joda.time.DateTime;
+import org.joda.time.Duration;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -62,9 +63,22 @@ public class SgvDbEntry extends Model {
             DateTime wallTime = new DateTime(sgvDbEntry.walltime);
             record = new EGVRecord(sgvDbEntry.sgvMgdl, TrendArrow.values()[sgvDbEntry.trend], unused1, sysTime, G4Noise.values()[sgvDbEntry.noise], wallTime);
         }
+        return Optional.fromNullable(record);
+    }
+
+    public static Optional<EGVRecord> getLastEgv(Duration ago) {
+        SgvDbEntry sgvDbEntry = new Select().from(SgvDbEntry.class).where("walltime > ?", new DateTime().minus(ago)).orderBy("systime DESC").limit(1).executeSingle();
+        EGVRecord record = null;
+        if (sgvDbEntry != null) {
+            DateTime unused1 = new DateTime(sgvDbEntry.systime);
+            DateTime sysTime = new DateTime(sgvDbEntry.systime);
+            DateTime wallTime = new DateTime(sgvDbEntry.walltime);
+            record = new EGVRecord(sgvDbEntry.sgvMgdl, TrendArrow.values()[sgvDbEntry.trend], unused1, sysTime, G4Noise.values()[sgvDbEntry.noise], wallTime);
+        }
 //        return new EGVRecord(sgvDbEntry.sgvMgdl, TrendArrow.values()[sgvDbEntry.trend], unused1, sysTime, G4Noise.values()[sgvDbEntry.noise], wallTime);
         return Optional.fromNullable(record);
     }
+
 
     public static List<EGVRecord> getLastEgvRecords(DateTime since) {
         List<SgvDbEntry> sgvDbEntryList = new Select().from(SgvDbEntry.class).where("walltime > ?", since.getMillis()).orderBy("systime ASC").execute();

@@ -1,37 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:background="@drawable/pillbox"
-    android:orientation="vertical">
+    android:orientation="horizontal">
 
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
+    <!--<LinearLayout-->
+    <!--android:layout_width="wrap_content"-->
+    <!--android:layout_height="wrap_content"-->
+    <!--android:orientation="horizontal">-->
 
         <TextView
-            android:id="@+id/pillvalue"
+            android:id="@+id/sgv_value"
             android:layout_width="wrap_content"
-            android:layout_height="fill_parent"
+            android:layout_height="match_parent"
             android:layout_gravity="center"
             android:paddingLeft="5dip"
             android:paddingRight="5dip"
-            android:text="\???"
+            android:text="@string/pillbox_uninitalized_placeholder"
             android:textAppearance="?android:attr/textAppearanceMedium"
-            android:textColor="#FFFFFF" />
+            android:textColor="#FFFFFF"
+            android:textStyle="bold" />
 
         <TextView
             android:id="@+id/heading"
-            android:layout_width="fill_parent"
-            android:layout_height="fill_parent"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
             android:layout_gravity="center"
             android:background="@drawable/pillhorizontalheader"
             android:gravity="center_vertical|center_horizontal"
             android:paddingLeft="5dip"
             android:paddingRight="5dip"
-            android:text="PL"
+            android:text="@string/pillbox_header_placeholder"
             android:textAppearance="?android:attr/textAppearanceSmallInverse"
             android:textColor="#000000" />
-    </LinearLayout>
-</RelativeLayout>
+    <!--</LinearLayout>-->
+</LinearLayout>

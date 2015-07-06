@@ -4,8 +4,11 @@ import android.content.Context;
 import android.util.Log;
 
 import com.nightscout.core.dexcom.Constants;
+import com.nightscout.core.dexcom.SpecialValue;
 import com.nightscout.core.dexcom.records.EGVRecord;
 import com.nightscout.core.model.GlucoseUnit;
+
+import net.tribe7.common.base.Optional;
 
 import org.nightscout.lasso.R;
 
@@ -87,22 +90,36 @@ public class SimpleAlarm implements AlarmStrategy {
         EGVRecord lastEgvRecord = egvRecords.get(egvRecords.size() - 1);
         AlarmResults alarmResults = new AlarmResults();
         alarmResults.severity = AlarmSeverity.NONE;
-        alarmResults.message = context.getString(R.string.alarm_notification_standard_body,
-                lastEgvRecord.getReading().asStr(unit),
-                lastEgvRecord.getTrend().symbol());
-        if (lastEgvRecord.getBgMgdl() > URGENT_HIGH_THRESHOLD) {
-            alarmResults.severity = AlarmSeverity.URGENT;
-            alarmResults.title = context.getString(R.string.alarm_notification_urgent_title, context.getString(R.string.app_name));
-        } else if (lastEgvRecord.getBgMgdl() > WARNING_HIGH_THRESHOLD) {
-            alarmResults.severity = AlarmSeverity.WARNING;
-            alarmResults.title = context.getString(R.string.alarm_notification_warning_title, context.getString(R.string.app_name));
+        Optional<String> specialValue = SpecialValue.getSpecialValueDescr(lastEgvRecord.getReading());
+        if (specialValue.isPresent()){
+            if (lastEgvRecord.getBgMgdl() == Constants.MAX_EGV || lastEgvRecord.getBgMgdl() == Constants.MIN_EGV) {
+                alarmResults.setSeverityAtHighest(AlarmSeverity.URGENT);
+            } else {
+                alarmResults.setSeverityAtHighest(AlarmSeverity.NORMAL);
+            }
+            alarmResults.addMessage(specialValue.get());
+        } else {
+            alarmResults.addMessage(context.getString(R.string.alarm_notification_standard_body,
+                    lastEgvRecord.getReading().asStr(unit),
+                    lastEgvRecord.getTrend().symbol()));
         }
-        if (lastEgvRecord.getBgMgdl() < URGENT_LOW_THRESHOLD) {
-            alarmResults.severity = AlarmSeverity.URGENT;
-            alarmResults.title = context.getString(R.string.alarm_notification_urgent_title, context.getString(R.string.app_name));
-        } else if (lastEgvRecord.getBgMgdl() < WARNING_LOW_THRESHOLD) {
-            alarmResults.severity = AlarmSeverity.WARNING;
-            alarmResults.title = context.getString(R.string.alarm_notification_warning_title, context.getString(R.string.app_name));
+        if (lastEgvRecord.getBgMgdl() < Constants.MAX_EGV) {
+            if (lastEgvRecord.getBgMgdl() > URGENT_HIGH_THRESHOLD) {
+                alarmResults.severity = AlarmSeverity.URGENT;
+                alarmResults.title = context.getString(R.string.alarm_notification_urgent_title, context.getString(R.string.app_name));
+            } else if (lastEgvRecord.getBgMgdl() > WARNING_HIGH_THRESHOLD) {
+                alarmResults.severity = AlarmSeverity.WARNING;
+                alarmResults.title = context.getString(R.string.alarm_notification_warning_title, context.getString(R.string.app_name));
+            }
+        }
+        if (lastEgvRecord.getBgMgdl() > Constants.MIN_EGV) {
+            if (lastEgvRecord.getBgMgdl() < URGENT_LOW_THRESHOLD) {
+                alarmResults.severity = AlarmSeverity.URGENT;
+                alarmResults.title = context.getString(R.string.alarm_notification_urgent_title, context.getString(R.string.app_name));
+            } else if (lastEgvRecord.getBgMgdl() < WARNING_LOW_THRESHOLD) {
+                alarmResults.severity = AlarmSeverity.WARNING;
+                alarmResults.title = context.getString(R.string.alarm_notification_warning_title, context.getString(R.string.app_name));
+            }
         }
         return alarmResults;
     }

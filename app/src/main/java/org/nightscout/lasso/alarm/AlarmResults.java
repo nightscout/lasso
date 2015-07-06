@@ -1,13 +1,18 @@
 package org.nightscout.lasso.alarm;
 
+import net.tribe7.common.base.Joiner;
+
+import java.util.ArrayList;
+import java.util.List;
+
 public class AlarmResults {
-    public AlarmSeverity severity = AlarmSeverity.NONE;
-    public String title;
-    public String message = "";
+    protected AlarmSeverity severity = AlarmSeverity.NONE;
+    protected String title;
+    protected List<String> messages = new ArrayList<>();
 
     public AlarmResults(String title, AlarmSeverity severity, String message) {
         this.title = title;
-        this.message = message;
+        appendMessage(message);
         this.severity = severity;
     }
 
@@ -20,14 +25,27 @@ public class AlarmResults {
     }
 
     public void appendMessage(String message) {
-        if (message.equals("")) {
+        if (message == null || this.messages.contains(message) | message.equals("")){
             return;
         }
-        if (!this.message.equals("")) {
-            this.message = this.message + "\n" + message;
-        } else {
-            this.message = message;
+        this.messages.add(message);
+    }
+
+    public void appendMessage(List<String> messages) {
+        for (String message: messages) {
+            appendMessage(message);
         }
+    }
+
+    public String getMessage(){
+        return Joiner.on('\n').join(this.messages);
+    }
+
+    public void addMessage(String message) {
+        if (message == null || this.messages.contains(message) | message.equals("")){
+            return;
+        }
+        this.messages.add(0, message);
     }
 
     public void appendMessages(String... messages) {
@@ -38,14 +56,24 @@ public class AlarmResults {
 
     public void mergeAlarmResults(AlarmResults... results) {
         for (AlarmResults alarmResult : results) {
-            appendMessage(alarmResult.message);
-            setSeverityAtHighest(alarmResult.severity);
-            if (title == null) {
+            appendMessage(alarmResult.messages);
+            if (alarmResult.getSeverity().ordinal() > severity.ordinal()) {
                 title = alarmResult.title;
-            } else if (alarmResult.title != null) {
-                title += "and " + alarmResult.title;
             }
+            setSeverityAtHighest(alarmResult.severity);
         }
+    }
+
+    public AlarmSeverity getSeverity() {
+        return severity;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
     }
 
     @Override
@@ -57,7 +85,7 @@ public class AlarmResults {
 
         if (severity != that.severity) return false;
         if (title != null ? !title.equals(that.title) : that.title != null) return false;
-        return !(message != null ? !message.equals(that.message) : that.message != null);
+        return !(messages != null ? !messages.equals(that.messages) : that.messages != null);
 
     }
 
@@ -65,7 +93,7 @@ public class AlarmResults {
     public int hashCode() {
         int result = severity != null ? severity.hashCode() : 0;
         result = 31 * result + (title != null ? title.hashCode() : 0);
-        result = 31 * result + (message != null ? message.hashCode() : 0);
+        result = 31 * result + (messages != null ? messages.hashCode() : 0);
         return result;
     }
 }

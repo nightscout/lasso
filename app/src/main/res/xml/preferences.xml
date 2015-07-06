@@ -26,6 +26,13 @@
         android:summaryOn="@string/show_all_notifications_on"
         android:title="@string/pref_show_all_notifications" />
 
+    <SwitchPreference
+        android:defaultValue="true"
+        android:key="@string/start_on_boot_key"
+        android:summaryOff="@string/start_on_boot_off"
+        android:summaryOn="@string/start_on_boot_on"
+        android:title="@string/pref_start_on_boot" />
+
     <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
         android:dialogMessage="@string/pref_message_api_url"
         android:dialogTitle="@string/pref_dialog_api_url"
@@ -39,15 +46,14 @@
         android:summary="@string/pref_message_contact_phone"
         android:title="@string/pref_title_contact_phone" />
 
-    <ListPreference
+    <org.nightscout.lasso.settings.SummaryBoundListPreference
         android:dialogTitle="@string/dialog_title_alarm_preference"
         android:entries="@array/entries_alarm_preference"
         android:entryValues="@array/entryvalues_alarm_preference"
         android:key="@string/alarm_model"
-        android:summary="@string/summary_alarm_preference"
         android:title="@string/title_alarm_preference" />
 
-    <ListPreference
+    <org.nightscout.lasso.settings.SummaryBoundListPreference
         android:defaultValue="0"
         android:entries="@array/pref_options_units"
         android:entryValues="@array/pref_options_units_values"
@@ -57,24 +63,27 @@
         android:title="@string/pref_title_chart_units_options" />
 
 
-    <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
-        android:dialogTitle="@string/diaglog_simple_alarm_urgent_high"
-        android:key="@string/simple_alarm_urgent_high"
-        android:summary="@string/summary_simple_alarm_urgent_high"
-        android:title="@string/title_simple_alarm_urgent_high" />
-    <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
-        android:dialogTitle="@string/diaglog_simple_alarm_warn_high"
-        android:key="@string/simple_alarm_warn_high"
-        android:summary="@string/summary_simple_alarm_warn_high"
-        android:title="@string/title_simple_alarm_warn_high" />
-    <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
-        android:dialogTitle="@string/diaglog_simple_alarm_warn_low"
-        android:key="@string/simple_alarm_warn_low"
-        android:summary="@string/summary_simple_alarm_warn_low"
-        android:title="@string/title_simple_alarm_warn_low" />
-    <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
-        android:dialogTitle="@string/diaglog_simple_alarm_urgent_low"
-        android:key="@string/simple_alarm_urgent_low"
-        android:summary="@string/summary_simple_alarm_urgent_low"
-        android:title="@string/title_simple_alarm_urgent_low" />
+    <PreferenceScreen android:title="@string/simple_thresholds_title">
+        <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
+            android:dialogTitle="@string/diaglog_simple_alarm_urgent_high"
+            android:key="@string/simple_alarm_urgent_high"
+            android:summary="@string/summary_simple_alarm_urgent_high"
+            android:title="@string/title_simple_alarm_urgent_high" />
+        <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
+            android:dialogTitle="@string/diaglog_simple_alarm_warn_high"
+            android:key="@string/simple_alarm_warn_high"
+            android:summary="@string/summary_simple_alarm_warn_high"
+            android:title="@string/title_simple_alarm_warn_high" />
+        <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
+            android:dialogTitle="@string/diaglog_simple_alarm_warn_low"
+            android:key="@string/simple_alarm_warn_low"
+            android:summary="@string/summary_simple_alarm_warn_low"
+            android:title="@string/title_simple_alarm_warn_low" />
+        <org.nightscout.lasso.settings.SummaryBoundEditTextPreference
+            android:dialogTitle="@string/diaglog_simple_alarm_urgent_low"
+            android:key="@string/simple_alarm_urgent_low"
+            android:summary="@string/summary_simple_alarm_urgent_low"
+            android:title="@string/title_simple_alarm_urgent_low" />
+    </PreferenceScreen>
+
 </PreferenceScreen>

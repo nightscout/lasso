@@ -11,6 +11,10 @@ import org.nightscout.lasso.R;
 
 public class SettingsActivity extends AppCompatActivity {
 
+    public SettingsActivity(){
+        
+    }
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
