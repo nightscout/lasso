@@ -18,6 +18,7 @@ import net.tribe7.common.base.Optional;
 
 import org.joda.time.DateTime;
 import org.joda.time.Minutes;
+import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Test;
 import org.nightscout.lasso.alarm.Alarm;
@@ -48,14 +49,14 @@ public class AlarmTest extends RobolectricTestBase {
     ActivityController<MainActivity> activityController;
     SharedPreferences preferences;
     Activity activity;
-
+    AlarmResults alarmResults;
     private ShadowNotificationManager shadowNotificationManager;
     private ShadowMediaPlayer shadowMediaPlayer;
     private ShadowAudioManager shadowAudioManager;
 
     @Before
     public void setUp() {
-        activity = Robolectric.buildActivity(MainActivity.class).create().get();
+        activity = Robolectric.buildActivity(MainActivity.class).create().start().get();
         shadowNotificationManager = shadowOf((NotificationManager) RuntimeEnvironment.application
                 .getSystemService(Context.NOTIFICATION_SERVICE));
         shadowMediaPlayer = new ShadowMediaPlayer();
@@ -63,6 +64,7 @@ public class AlarmTest extends RobolectricTestBase {
         //(AudioManager) RuntimeEnvironment.application.getSystemService(Context.AUDIO_SERVICE);
         ShadowLog.stream = System.out;
         preferences = PreferenceManager.getDefaultSharedPreferences(activity.getApplicationContext());
+        alarmResults = new AlarmResults();
     }
 
     private void setSimpleAlarm() {
@@ -120,32 +122,38 @@ public class AlarmTest extends RobolectricTestBase {
 
     @Test
     public void testAlarmResultSeverityTakesHighestServerity() {
-        AlarmResults alarmResults = new AlarmResults();
-        alarmResults.severity = AlarmSeverity.NONE;
+        alarmResults = new AlarmResults();
+        alarmResults.setSeverityAtHighest(AlarmSeverity.NONE);
         alarmResults.setSeverityAtHighest(AlarmSeverity.URGENT);
-        assertThat(alarmResults.severity, is(AlarmSeverity.URGENT));
+        assertThat(alarmResults.getSeverity(), is(AlarmSeverity.URGENT));
     }
 
     @Test
     public void testAlarmResultAppendsMessage() {
         String expectedResults = "Test1\nTest2";
-        AlarmResults alarmResults = new AlarmResults();
-        alarmResults.message = "Test1";
+        alarmResults = new AlarmResults();
+        alarmResults.appendMessage("Test1");
         alarmResults.appendMessage("Test2");
-        assertThat(alarmResults.message, is(expectedResults));
+        assertThat(alarmResults.getMessage(), is(expectedResults));
     }
 
+    // FIXME useless test
     @Test
     public void testAlarmResultMergeAlarmResultMergesProperly() {
         AlarmResults expectedResults = new AlarmResults();
-        expectedResults.severity = AlarmSeverity.URGENT;
-        expectedResults.message = "Test1\nTest2\nTest3\nTest4";
-        AlarmResults alarmResults = new AlarmResults();
-        alarmResults.severity = AlarmSeverity.NONE;
-        alarmResults.message = "Test1\nTest2";
+        expectedResults.setSeverityAtHighest(AlarmSeverity.URGENT);
+        expectedResults.appendMessage("Test1");
+        expectedResults.appendMessage("Test2");
+        expectedResults.appendMessage("Test3");
+        expectedResults.appendMessage("Test4");
+        alarmResults = new AlarmResults();
+        alarmResults.setSeverityAtHighest(AlarmSeverity.NONE);
+        alarmResults.appendMessage("Test1");
+        alarmResults.appendMessage("Test2");
         AlarmResults alarmResults2 = new AlarmResults();
-        alarmResults2.severity = AlarmSeverity.URGENT;
-        alarmResults2.message = "Test3\nTest4";
+        alarmResults2.setSeverityAtHighest(AlarmSeverity.URGENT);
+        alarmResults2.appendMessage("Test3");
+        alarmResults2.appendMessage("Test4");
         alarmResults.mergeAlarmResults(alarmResults2);
         assertThat(alarmResults, is(expectedResults));
     }
@@ -154,7 +162,7 @@ public class AlarmTest extends RobolectricTestBase {
     public void testBatteryAbsentDoesNotAlarm() {
         Optional<Integer> battery = Optional.absent();
         Alarm alarm = new Alarm(getContext());
-        AlarmResults alarmResults = alarm.analyzeBattery(battery);
+        alarmResults = alarm.analyzeBattery(battery);
         AlarmResults emptyResults = new AlarmResults();
         assertThat(alarmResults, is(emptyResults));
     }
@@ -163,7 +171,7 @@ public class AlarmTest extends RobolectricTestBase {
     public void testNormalBatteryDoesNotAlarm() {
         Optional<Integer> battery = Optional.of(95);
         Alarm alarm = new Alarm(getContext());
-        AlarmResults alarmResults = alarm.analyzeBattery(battery);
+        alarmResults = alarm.analyzeBattery(battery);
         AlarmResults emptyResults = new AlarmResults();
         assertThat(alarmResults, is(emptyResults));
     }
@@ -172,16 +180,16 @@ public class AlarmTest extends RobolectricTestBase {
     public void testWarnBatteryAlarms() {
         Optional<Integer> battery = Optional.of(11);
         Alarm alarm = new Alarm(getContext());
-        AlarmResults alarmResults = alarm.analyzeBattery(battery);
-        assertThat(alarmResults.severity, is(AlarmSeverity.WARNING));
+        alarmResults = alarm.analyzeBattery(battery);
+        assertThat(alarmResults.getSeverity(), is(AlarmSeverity.WARNING));
     }
 
     @Test
     public void testUrgentBatteryAlarms() {
         Optional<Integer> battery = Optional.of(5);
         Alarm alarm = new Alarm(getContext());
-        AlarmResults alarmResults = alarm.analyzeBattery(battery);
-        assertThat(alarmResults.severity, is(AlarmSeverity.URGENT));
+        alarmResults = alarm.analyzeBattery(battery);
+        assertThat(alarmResults.getSeverity(), is(AlarmSeverity.URGENT));
     }
 
     private List<EGVRecord> generateStaleEgvRecordList(int minutes) {
@@ -196,7 +204,7 @@ public class AlarmTest extends RobolectricTestBase {
         preferences.edit().putBoolean(getContext().getString(R.string.stale_alarm_enabled), false).apply();
         Alarm alarm = new Alarm(getContext());
         List<EGVRecord> egvRecords = generateStaleEgvRecordList(16);
-        AlarmResults alarmResults = alarm.analyzeTime(egvRecords, GlucoseUnit.MGDL, new DateTime().minus(Minutes.minutes(16)));
+        alarmResults = alarm.analyzeTime(egvRecords, GlucoseUnit.MGDL, new DateTime().minus(Minutes.minutes(16)));
         AlarmResults emptyResults = new AlarmResults();
         assertThat(alarmResults, is(emptyResults));
     }
@@ -206,8 +214,8 @@ public class AlarmTest extends RobolectricTestBase {
         preferences.edit().putBoolean(getContext().getString(R.string.stale_alarm_enabled), true).apply();
         Alarm alarm = new Alarm(getContext());
         List<EGVRecord> egvRecords = generateStaleEgvRecordList(16);
-        AlarmResults alarmResults = alarm.analyzeTime(egvRecords, GlucoseUnit.MGDL, new DateTime());
-        assertThat(alarmResults.severity, is(AlarmSeverity.WARNING));
+        alarmResults = alarm.analyzeTime(egvRecords, GlucoseUnit.MGDL, new DateTime());
+        assertThat(alarmResults.getSeverity(), is(AlarmSeverity.WARNING));
     }
 
     @Test
@@ -215,8 +223,8 @@ public class AlarmTest extends RobolectricTestBase {
         preferences.edit().putBoolean(getContext().getString(R.string.stale_alarm_enabled), true).apply();
         Alarm alarm = new Alarm(getContext());
         List<EGVRecord> egvRecords = generateStaleEgvRecordList(45);
-        AlarmResults alarmResults = alarm.analyzeTime(egvRecords, GlucoseUnit.MGDL, new DateTime());
-        assertThat(alarmResults.severity, is(AlarmSeverity.URGENT));
+        alarmResults = alarm.analyzeTime(egvRecords, GlucoseUnit.MGDL, new DateTime());
+        assertThat(alarmResults.getSeverity(), is(AlarmSeverity.URGENT));
     }
 
     @Test
@@ -225,19 +233,19 @@ public class AlarmTest extends RobolectricTestBase {
         Alarm alarm = new Alarm(getContext());
         String expectedMessage = getContext().getString(R.string.alarm_out_of_range_message, 45);
         List<EGVRecord> egvRecords = generateStaleEgvRecordList(45);
-        AlarmResults alarmResults = alarm.analyzeTime(egvRecords, GlucoseUnit.MGDL, new DateTime());
-        assertThat(alarmResults.message, containsString(expectedMessage));
+        alarmResults = alarm.analyzeTime(egvRecords, GlucoseUnit.MGDL, new DateTime());
+        assertThat(alarmResults.getMessage(), containsString(expectedMessage));
     }
 
     @Test
     public void testSimpleAlarmStrategyNoAlarm() {
         AlarmStrategy strategy = new SimpleAlarm(getContext());
         List<EGVRecord> egvRecords = normalEgvList();
-        AlarmResults alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
+        alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
         AlarmResults expectedResults = new AlarmResults();
-        expectedResults.severity = AlarmSeverity.NONE;
-        expectedResults.message = getContext().getString(R.string.alarm_notification_standard_body,
-                100, TrendArrow.FLAT.symbol());
+        expectedResults.setSeverityAtHighest(AlarmSeverity.NONE);
+        expectedResults.appendMessage(getContext().getString(R.string.alarm_notification_standard_body,
+                100, TrendArrow.FLAT.symbol()));
         assertThat(alarmResults, is(expectedResults));
     }
 
@@ -245,12 +253,12 @@ public class AlarmTest extends RobolectricTestBase {
     public void testSimpleAlarmStrategyLowWarnAlarm() {
         AlarmStrategy strategy = new SimpleAlarm(getContext());
         List<EGVRecord> egvRecords = warnLowEgvList();
-        AlarmResults alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
+        alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
         AlarmResults expectedResults = new AlarmResults();
-        expectedResults.severity = AlarmSeverity.WARNING;
-        expectedResults.title = getContext().getString(R.string.alarm_notification_warning_title, getContext().getString(R.string.app_name));
-        expectedResults.message = getContext().getString(R.string.alarm_notification_standard_body,
-                68, TrendArrow.FLAT.symbol());
+        expectedResults.setSeverityAtHighest(AlarmSeverity.WARNING);
+        expectedResults.setTitle(getContext().getString(R.string.alarm_notification_warning_title, getContext().getString(R.string.app_name)));
+        expectedResults.appendMessage(getContext().getString(R.string.alarm_notification_standard_body,
+                68, TrendArrow.FLAT.symbol()));
         assertThat(alarmResults, is(expectedResults));
     }
 
@@ -258,12 +266,12 @@ public class AlarmTest extends RobolectricTestBase {
     public void testSimpleAlarmStrategyLowUrgentAlarm() {
         AlarmStrategy strategy = new SimpleAlarm(getContext());
         List<EGVRecord> egvRecords = urgentLowEgvList();
-        AlarmResults alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
+        alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
         AlarmResults expectedResults = new AlarmResults();
-        expectedResults.severity = AlarmSeverity.URGENT;
-        expectedResults.title = getContext().getString(R.string.alarm_notification_urgent_title, getContext().getString(R.string.app_name));
-        expectedResults.message = getContext().getString(R.string.alarm_notification_standard_body,
-                40, TrendArrow.FLAT.symbol());
+        expectedResults.setSeverityAtHighest(AlarmSeverity.URGENT);
+        expectedResults.setTitle(getContext().getString(R.string.alarm_notification_urgent_title, getContext().getString(R.string.app_name)));
+        expectedResults.appendMessage(getContext().getString(R.string.alarm_notification_standard_body,
+                40, TrendArrow.FLAT.symbol()));
         assertThat(alarmResults, is(expectedResults));
     }
 
@@ -271,12 +279,12 @@ public class AlarmTest extends RobolectricTestBase {
     public void testSimpleAlarmStrategyHighWarnAlarm() {
         AlarmStrategy strategy = new SimpleAlarm(getContext());
         List<EGVRecord> egvRecords = warnHighEgvList();
-        AlarmResults alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
+        alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
         AlarmResults expectedResults = new AlarmResults();
-        expectedResults.severity = AlarmSeverity.WARNING;
-        expectedResults.title = getContext().getString(R.string.alarm_notification_warning_title, getContext().getString(R.string.app_name));
-        expectedResults.message = getContext().getString(R.string.alarm_notification_standard_body,
-                195, TrendArrow.FLAT.symbol());
+        expectedResults.setSeverityAtHighest(AlarmSeverity.WARNING);
+        expectedResults.setTitle(getContext().getString(R.string.alarm_notification_warning_title, getContext().getString(R.string.app_name)));
+        expectedResults.appendMessage(getContext().getString(R.string.alarm_notification_standard_body,
+                195, TrendArrow.FLAT.symbol()));
         assertThat(alarmResults, is(expectedResults));
     }
 
@@ -284,19 +292,12 @@ public class AlarmTest extends RobolectricTestBase {
     public void testSimpleHighUrgentAlarm() {
         AlarmStrategy strategy = new SimpleAlarm(getContext());
         List<EGVRecord> egvRecords = urgentHighEgvList();
-        AlarmResults alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
+        alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
         AlarmResults expectedResults = new AlarmResults();
-        expectedResults.severity = AlarmSeverity.URGENT;
-        expectedResults.title = getContext().getString(R.string.alarm_notification_urgent_title, getContext().getString(R.string.app_name));
-        expectedResults.message = getContext().getString(R.string.alarm_notification_standard_body,
-                265, TrendArrow.FLAT.symbol());
-        Log.d("Actual", "Title: " + alarmResults.title);
-        Log.d("Expected", "Title: " + expectedResults.title);
-        Log.d("Actual", "message: " + alarmResults.message);
-        Log.d("Expected", "message: " + expectedResults.message);
-        Log.d("Actual", "severity: " + alarmResults.severity.name());
-        Log.d("Expected", "severity: " + expectedResults.severity.name());
-
+        expectedResults.setSeverityAtHighest(AlarmSeverity.URGENT);
+        expectedResults.setTitle(getContext().getString(R.string.alarm_notification_urgent_title, getContext().getString(R.string.app_name)));
+        expectedResults.appendMessage(getContext().getString(R.string.alarm_notification_standard_body,
+                265, TrendArrow.FLAT.symbol()));
         assertThat(alarmResults, is(expectedResults));
     }
 
@@ -304,14 +305,14 @@ public class AlarmTest extends RobolectricTestBase {
     public void testAr2AlarmStrategyNoAlarm() {
         AlarmStrategy strategy = new Ar2(getContext());
         List<EGVRecord> egvRecords = normalEgvList();
-        AlarmResults alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
+        alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
         AlarmResults expectedResults = new AlarmResults();
-        expectedResults.severity = AlarmSeverity.NONE;
+        expectedResults.setSeverityAtHighest(AlarmSeverity.NONE);
         GlucoseReading glucoseReading = new GlucoseReading(100, GlucoseUnit.MGDL);
-        expectedResults.title = getContext().getString(R.string.alarm_notification_normal_title,
-                getContext().getString(R.string.app_name));
-        expectedResults.message = getContext().getString(R.string.alarm_notification_standard_body,
-                100, TrendArrow.FLAT.symbol());
+        expectedResults.setTitle(getContext().getString(R.string.alarm_notification_normal_title,
+                getContext().getString(R.string.app_name)));
+        expectedResults.appendMessage(getContext().getString(R.string.alarm_notification_standard_body,
+                100, TrendArrow.FLAT.symbol()));
 
         assertThat(alarmResults, is(expectedResults));
     }
@@ -320,12 +321,12 @@ public class AlarmTest extends RobolectricTestBase {
     public void testAr2AlarmStrategyLowWarnAlarm() {
         AlarmStrategy strategy = new Ar2(getContext());
         List<EGVRecord> egvRecords = warnLowEgvList();
-        AlarmResults alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
+        alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
         AlarmResults expectedResults = new AlarmResults();
-        expectedResults.severity = AlarmSeverity.WARNING;
-        expectedResults.title = getContext().getString(R.string.alarm_notification_warning_title, getContext().getString(R.string.app_name));
-        expectedResults.message = getContext().getString(R.string.alarm_notification_standard_body,
-                68, TrendArrow.FLAT.symbol());
+        expectedResults.setSeverityAtHighest(AlarmSeverity.WARNING);
+        expectedResults.setTitle(getContext().getString(R.string.alarm_notification_warning_title, getContext().getString(R.string.app_name)));
+        expectedResults.appendMessage(getContext().getString(R.string.alarm_notification_standard_body,
+                68, TrendArrow.FLAT.symbol()));
         assertThat(alarmResults, is(expectedResults));
     }
 
@@ -333,12 +334,12 @@ public class AlarmTest extends RobolectricTestBase {
     public void testAr2AlarmStrategyLowUrgentAlarm() {
         AlarmStrategy strategy = new Ar2(getContext());
         List<EGVRecord> egvRecords = urgentLowEgvList();
-        AlarmResults alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
+        alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
         AlarmResults expectedResults = new AlarmResults();
-        expectedResults.severity = AlarmSeverity.URGENT;
-        expectedResults.title = getContext().getString(R.string.alarm_notification_urgent_title, getContext().getString(R.string.app_name));
-        expectedResults.message = getContext().getString(R.string.alarm_notification_standard_body,
-                40, TrendArrow.FLAT.symbol());
+        expectedResults.setSeverityAtHighest(AlarmSeverity.URGENT);
+        expectedResults.setTitle(getContext().getString(R.string.alarm_notification_urgent_title, getContext().getString(R.string.app_name)));
+        expectedResults.appendMessage(getContext().getString(R.string.alarm_notification_standard_body,
+                40, TrendArrow.FLAT.symbol()));
         assertThat(alarmResults, is(expectedResults));
     }
 
@@ -346,12 +347,12 @@ public class AlarmTest extends RobolectricTestBase {
     public void testAr2AlarmStrategyHighWarnAlarm() {
         AlarmStrategy strategy = new Ar2(getContext());
         List<EGVRecord> egvRecords = warnHighEgvList();
-        AlarmResults alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
+        alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
         AlarmResults expectedResults = new AlarmResults();
-        expectedResults.severity = AlarmSeverity.WARNING;
-        expectedResults.title = getContext().getString(R.string.alarm_notification_warning_title, getContext().getString(R.string.app_name));
-        expectedResults.message = getContext().getString(R.string.alarm_notification_standard_body,
-                195, TrendArrow.FLAT.symbol());
+        expectedResults.setSeverityAtHighest(AlarmSeverity.WARNING);
+        expectedResults.setTitle(getContext().getString(R.string.alarm_notification_warning_title, getContext().getString(R.string.app_name)));
+        expectedResults.appendMessage(getContext().getString(R.string.alarm_notification_standard_body,
+                195, TrendArrow.FLAT.symbol()));
         assertThat(alarmResults, is(expectedResults));
     }
 
@@ -359,32 +360,45 @@ public class AlarmTest extends RobolectricTestBase {
     public void testAr2HighUrgentAlarm() {
         AlarmStrategy strategy = new Ar2(getContext());
         List<EGVRecord> egvRecords = urgentHighEgvList();
-        AlarmResults alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
+        alarmResults = strategy.analyze(egvRecords, GlucoseUnit.MGDL);
         AlarmResults expectedResults = new AlarmResults();
-        expectedResults.severity = AlarmSeverity.URGENT;
-        expectedResults.title = getContext().getString(R.string.alarm_notification_urgent_title, getContext().getString(R.string.app_name));
-        expectedResults.message = getContext().getString(R.string.alarm_notification_standard_body,
-                265, TrendArrow.FLAT.symbol());
+        expectedResults.setSeverityAtHighest(AlarmSeverity.URGENT);
+        expectedResults.setTitle(getContext().getString(R.string.alarm_notification_urgent_title, getContext().getString(R.string.app_name)));
+        expectedResults.appendMessage(getContext().getString(R.string.alarm_notification_standard_body,
+                265, TrendArrow.FLAT.symbol()));
         assertThat(alarmResults, is(expectedResults));
+    }
+
+    @Test
+    public void testIsSnoozed() {
+        Alarm alarm = new Alarm(getContext());
+        preferences.edit().putLong("snooze_" + AlarmSeverity.NONE.name(), new DateTime().plus(Minutes.minutes(5)).getMillis()).apply();
+        assertThat(alarm.isSnoozed(), is(true));
     }
 
     @Test
     public void testSnooze() {
         Alarm alarm = new Alarm(getContext());
-        alarm.alarmSnooze(5000);
-        assertThat(alarm.isSnoozed(), is(true));
+        // Test with the AR strategy
+        preferences.edit().putString(getContext().getString(R.string.alarm_model), "3").apply();
+        alarm.alarmSnooze(Minutes.minutes(5).toStandardDuration());
+//        preferences.edit().putLong("snooze_" + AlarmSeverity.NONE.name(), new DateTime().plus(Minutes.minutes(5)).getMillis()).apply();
+        assertThat(preferences.getLong("snooze_" + AlarmSeverity.NONE.name(), 0) > new DateTime().getMillis(), is(true));
     }
 
     @Test
     public void testExpiredSnooze() {
-        preferences.edit().putLong("snooze_" + AlarmSeverity.NONE.name(), new DateTime().minus(Minutes.minutes(5)).getMillis()).apply();
+        preferences.edit().putLong("snooze_" + AlarmSeverity.NONE.name(), new DateTime().minus(Minutes.minutes(10)).getMillis()).apply();
         Alarm alarm = new Alarm(getContext());
         assertThat(alarm.isSnoozed(), is(false));
     }
 
     @Test
-    public void testAlarmCreatesNotification() {
+    public void testAlarmWarningCreatesNotificationWithNormalNotificationsDisabled() {
         List<EGVRecord> egvRecords = warnHighEgvList();
+        preferences.edit().putString(getContext().getString(R.string.alarm_model), "3").apply();
+        preferences.edit().putBoolean(getContext().getString(R.string.show_all_notifications_enabled), false).apply();
+        preferences.edit().putString(getContext().getString(R.string.contact_phone), "5558675309").apply();
         Alarm alarm = new Alarm(getContext());
         alarm.analyze(egvRecords, GlucoseUnit.MGDL, Optional.of(100), new DateTime());
         // FIXME - have to disable the ringer due to Robolectric NPE with mediaplayer
@@ -400,9 +414,9 @@ public class AlarmTest extends RobolectricTestBase {
         Alarm alarm = new Alarm(getContext());
         alarm.analyze(egvRecords, GlucoseUnit.MGDL, Optional.of(100), new DateTime());
         preferences.edit().putBoolean(getContext().getString(R.string.show_all_notifications_enabled), false).apply();
+        preferences.edit().putString(getContext().getString(R.string.contact_phone), "5558675309").apply();
         // FIXME - have to disable the ringer due to Robolectric NPE with mediaplayer
         shadowAudioManager.setRingerMode(AudioManager.RINGER_MODE_VIBRATE);
-        Log.d("MediaState", "State: " + shadowMediaPlayer.getState().name());
         alarm.alarm();
         egvRecords = normalEgvList();
         alarm.analyze(egvRecords, GlucoseUnit.MGDL, Optional.of(100), new DateTime());
@@ -410,11 +424,98 @@ public class AlarmTest extends RobolectricTestBase {
         assertThat(shadowNotificationManager.size(), is(0));
     }
 
+    public void testNoopStrategyUrgentHighDoesNotAlert() {
+        alarmResults = new AlarmResults();
+        preferences.edit().putString(getContext().getString(R.string.alarm_model), "1").apply();
+        shadowAudioManager.setRingerMode(AudioManager.RINGER_MODE_VIBRATE);
+        Alarm alarm = new Alarm(getContext());
+        alarm.analyze(urgentHighEgvList(), GlucoseUnit.MGDL, Optional.of(100), new DateTime());
+        assertThat(alarm.getAlarmResults(), is(alarmResults));
+    }
+
+    public void testNoopStrategyWarningHighDoesNotAlert() {
+        alarmResults = new AlarmResults();
+        preferences.edit().putString(getContext().getString(R.string.alarm_model), "1").apply();
+        shadowAudioManager.setRingerMode(AudioManager.RINGER_MODE_VIBRATE);
+        Alarm alarm = new Alarm(getContext());
+        alarm.analyze(warnHighEgvList(), GlucoseUnit.MGDL, Optional.of(100), new DateTime());
+        assertThat(alarm.getAlarmResults(), is(alarmResults));
+    }
+
+    public void testNoopStrategyUrgentLowDoesNotAlert() {
+        alarmResults = new AlarmResults();
+        preferences.edit().putString(getContext().getString(R.string.alarm_model), "1").apply();
+        shadowAudioManager.setRingerMode(AudioManager.RINGER_MODE_VIBRATE);
+        Alarm alarm = new Alarm(getContext());
+        alarm.analyze(urgentLowEgvList(), GlucoseUnit.MGDL, Optional.of(100), new DateTime());
+        assertThat(alarm.getAlarmResults(), is(alarmResults));
+    }
+
+    public void testNoopStrategyWarningLowDoesNotAlert() {
+        alarmResults = new AlarmResults();
+        preferences.edit().putString(getContext().getString(R.string.alarm_model), "1").apply();
+        shadowAudioManager.setRingerMode(AudioManager.RINGER_MODE_VIBRATE);
+        Alarm alarm = new Alarm(getContext());
+        alarm.analyze(warnLowEgvList(), GlucoseUnit.MGDL, Optional.of(100), new DateTime());
+        assertThat(alarm.getAlarmResults(), is(alarmResults));
+    }
+
+    public void testNoopStrategyLowBatteryDoesNotAlert() {
+        alarmResults = new AlarmResults();
+        preferences.edit().putString(getContext().getString(R.string.alarm_model), "1").apply();
+        shadowAudioManager.setRingerMode(AudioManager.RINGER_MODE_VIBRATE);
+        Alarm alarm = new Alarm(getContext());
+        alarm.analyze(normalEgvList(), GlucoseUnit.MGDL, Optional.of(11), new DateTime());
+        assertThat(alarm.getAlarmResults(), is(alarmResults));
+    }
+
+    public void testNoopStrategyUrgentLowBatteryDoesNotAlert() {
+        setSilentMode();
+        alarmResults = new AlarmResults();
+        preferences.edit().putString(getContext().getString(R.string.alarm_model), "1").apply();
+        Alarm alarm = new Alarm(getContext());
+        alarm.analyze(normalEgvList(), GlucoseUnit.MGDL, Optional.of(5), new DateTime());
+        assertThat(alarm.getAlarmResults(), is(alarmResults));
+    }
+
+    public void testNoopStrategyStaleDataDoesNotAlert() {
+        setSilentMode();
+        alarmResults = new AlarmResults();
+        preferences.edit().putString(getContext().getString(R.string.alarm_model), "1").apply();
+        Alarm alarm = new Alarm(getContext());
+        alarm.analyze(generateStaleEgvRecordList(16), GlucoseUnit.MGDL, Optional.of(100), new DateTime());
+        assertThat(alarm.getAlarmResults(), is(alarmResults));
+    }
+
+    public void testNoopStrategyUrgentStaleDoesNotAlert() {
+        setSilentMode();
+        alarmResults = new AlarmResults();
+        preferences.edit().putString(getContext().getString(R.string.alarm_model), "1").apply();
+        Alarm alarm = new Alarm(getContext());
+        alarm.analyze(generateStaleEgvRecordList(46), GlucoseUnit.MGDL, Optional.of(100), new DateTime());
+        assertThat(alarm.getAlarmResults(), is(alarmResults));
+    }
+
+    @Test
+    public void testGenerateAlarm() throws Exception {
+        setSilentMode();
+        JSONObject json = new JSONObject("{\"level\":2, \"title\":\"Test\", \"message\":\"Test\"}");
+        Alarm alarm = new Alarm(getContext());
+        alarm.generateAlarm(json);
+        AlarmResults expectedResults = new AlarmResults("Test", AlarmSeverity.URGENT, "Test");
+        assertThat(alarm.getAlarmResults(), is(expectedResults));
+    }
+
+    private void setSilentMode() {
+        shadowAudioManager.setRingerMode(AudioManager.RINGER_MODE_VIBRATE);
+    }
+
 
     // TODO - test that phone vibrates
     // TODO - test that media plays
     // TODO - test that media snoozes properly
     // TODO - test that media stops playing when transitioning from ! None alarm to None
+    // TODO - verify priorities react as expected
 
 
     public Context getContext() {

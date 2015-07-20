@@ -50,4 +50,6 @@
     <string name="contact_phone" translatable="false">contact_phone</string>
     <string name="stale_alarm_enabled" translatable="false">stale_alarm_enabled</string>
     <string name="show_all_notifications_enabled">show_all_notifications</string>
+    <string name="pill_text" translatable="false" />
+    <string name="start_on_boot_key">start_on_boot</string>
 </resources>

@@ -11,6 +11,7 @@ import android.net.Uri;
 import android.preference.PreferenceManager;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.NotificationManagerCompat;
+import android.support.v4.app.RemoteInput;
 import android.util.Log;
 
 import com.nightscout.core.dexcom.records.EGVRecord;
@@ -19,12 +20,14 @@ import com.nightscout.core.model.GlucoseUnit;
 import net.tribe7.common.base.Optional;
 
 import org.joda.time.DateTime;
+import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.joda.time.Minutes;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.nightscout.lasso.BuildConfig;
 import org.nightscout.lasso.MainActivity;
+import org.nightscout.lasso.NightscoutMonitor;
 import org.nightscout.lasso.R;
 import org.nightscout.lasso.preferences.AndroidPreferences;
 
@@ -36,8 +39,9 @@ import dagger.ObjectGraph;
 
 
 public class Alarm {
-    public Minutes ALARM_TIMEAGO_WARN_MINS = Minutes.minutes(15);
-    public Minutes ALARM_TIMEAGO_URGENT_MINS = Minutes.minutes(30);
+    public final static String EXTRA_VOICE_REPLY = "extra_voice_reply";
+    public static Duration ALARM_TIMEAGO_WARN_MINS = Minutes.minutes(15).toStandardDuration();
+    public static Duration ALARM_TIMEAGO_URGENT_MINS = Minutes.minutes(30).toStandardDuration();
     @Inject
     AlarmStrategy strategy;
     private MediaPlayer mediaPlayer;
@@ -87,7 +91,7 @@ public class Alarm {
             } else if (lastRecordWallTime.plus(ALARM_TIMEAGO_WARN_MINS).isBeforeNow()) {
                 Log.d("Alarm", "Warning stale data");
                 results.setSeverityAtHighest(AlarmSeverity.WARNING);
-                results.appendMessage(context.getString(R.string.alarm_timeago_warn_message, egvRecords.get(egvRecords.size() - 1).getReading().asStr(unit), unit.name(), Minutes.minutesBetween(lastRecordWallTime, Instant.now()).getMinutes()));
+                results.appendMessage(context.getString(R.string.alarm_timeago_warn_message, egvRecords.get(egvRecords.size() - 1).getReading().asStr(unit), Minutes.minutesBetween(lastRecordWallTime, Instant.now()).getMinutes()));
                 results.title = context.getString(R.string.alarm_timeago_standard_title);
             }
         }
@@ -105,12 +109,12 @@ public class Alarm {
             if (uploaderBattery.get() < ALARM_BATTERY_URGENT) {
                 Log.d("Alarm", "Urgent low battery");
                 results.setSeverityAtHighest(AlarmSeverity.URGENT);
-                results.appendMessage(context.getString(R.string.alarm_uploader_battery_urgent_message));
+                results.appendMessage(context.getString(R.string.alarm_uploader_battery_urgent_message, uploaderBattery.get()));
                 results.title = context.getString(R.string.alarm_uploader_battery_urgent_title);
             } else if (uploaderBattery.get() < ALARM_BATTERY_WARN) {
                 Log.d("Alarm", "Warning low battery");
                 results.setSeverityAtHighest(AlarmSeverity.WARNING);
-                results.appendMessage(context.getString(R.string.alarm_uploader_battery_warn_message));
+                results.appendMessage(context.getString(R.string.alarm_uploader_battery_warn_message, uploaderBattery.get()));
                 results.title = context.getString(R.string.alarm_uploader_battery_warn_title);
             }
         } else {
@@ -149,12 +153,17 @@ public class Alarm {
                 alarmResults.title = jsonAlarm.getString("title");
             }
             if (jsonAlarm.has("message")) {
-                alarmResults.message = jsonAlarm.getString("message");
+                alarmResults.addMessage(jsonAlarm.getString("message"));
             }
             this.alarm();
         } catch (JSONException e) {
             e.printStackTrace();
         }
+    }
+
+    public void alarm(AlarmResults results) {
+        this.alarmResults = results;
+        alarm();
     }
 
     public void alarm() {
@@ -166,7 +175,7 @@ public class Alarm {
         if (alarmResults.severity.ordinal() <= AlarmSeverity.LOW.ordinal() && !preferences.areAllNotificationsEnabled()) {
             return;
         }
-        showNotification(alarmResults.severity, alarmResults.title, alarmResults.message);
+        showNotification(alarmResults.severity, alarmResults.title, alarmResults.getMessage());
         AudioManager am = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
 
         // First check to see if we are in silent mode
@@ -205,21 +214,24 @@ public class Alarm {
                 vibePattern = new long[]{};
         }
 
+
         mNotifyBuilder = new NotificationCompat.Builder(context)
                 .setContentTitle(title)
                 .setContentText(message)
                 .setContentIntent(pendingIntent)
-                .extend(wearableExtender)
                 .setPriority(Notification.PRIORITY_HIGH)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(message))
                 .setSmallIcon(R.drawable.ic_launcher);
-        if (!isSnoozed() && (severity.ordinal() >= AlarmSeverity.NORMAL.ordinal())) {
+        if (!isSnoozed() && (severity.ordinal() > AlarmSeverity.NORMAL.ordinal())) {
             Intent snoozeIntent = new Intent("org.nightscout.scout.SNOOZE");
             PendingIntent pendingSnooze =
                     PendingIntent.getBroadcast(context, 0, snoozeIntent,
                             PendingIntent.FLAG_UPDATE_CURRENT);
-            mNotifyBuilder.addAction(R.drawable.ic_alarm_black_24dp, "Snooze", pendingSnooze)
+
+            mNotifyBuilder.addAction(R.drawable.ic_alarm_black_24dp, context.getString(R.string.snooze_label), pendingSnooze)
                     .setVibrate(vibePattern);
+            NotificationCompat.Action snoozeAction = new NotificationCompat.Action.Builder(R.drawable.ic_alarm_black_24dp, context.getString(R.string.snooze_label), pendingSnooze).build();
+            wearableExtender.addAction(snoozeAction);
         }
         if (preferences.getContactPhone().isPresent()) {
             Intent callIntent = new Intent(Intent.ACTION_CALL);
@@ -227,12 +239,22 @@ public class Alarm {
             PendingIntent pendingCall =
                     PendingIntent.getActivity(context, 0, callIntent,
                             PendingIntent.FLAG_UPDATE_CURRENT);
+            NotificationCompat.Action callAction = new NotificationCompat.Action.Builder(R.drawable.ic_call_black_24dp, context.getString(R.string.call_label), pendingCall).build();
+            wearableExtender.addAction(callAction);
             Intent msgIntent = new Intent(Intent.ACTION_VIEW, Uri.fromParts("sms", preferences.getContactPhone().get(), null));
+            Intent wearMsgIntent = new Intent(NightscoutMonitor.WEAR_MSG_RELAY);
             PendingIntent pendingMsg =
                     PendingIntent.getActivity(context, 0, msgIntent, PendingIntent.FLAG_UPDATE_CURRENT);
-            mNotifyBuilder.addAction(R.drawable.ic_call_black_24dp, "Call", pendingCall)
-                    .addAction(R.drawable.ic_message_black_24dp, "Msg", pendingMsg);
+            PendingIntent wearPendingMsg =
+                    PendingIntent.getBroadcast(context, 0, wearMsgIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+
+            RemoteInput remoteInput = new RemoteInput.Builder(EXTRA_VOICE_REPLY).setLabel(context.getString(R.string.message_label)).setChoices(context.getResources().getStringArray(R.array.wear_responses)).build();
+            NotificationCompat.Action messageAction = new NotificationCompat.Action.Builder(R.drawable.ic_message_black_24dp, context.getString(R.string.wear_message_title), wearPendingMsg).addRemoteInput(remoteInput).build();
+            wearableExtender.addAction(messageAction);
+            mNotifyBuilder.addAction(R.drawable.ic_call_black_24dp, context.getString(R.string.call_label), pendingCall)
+                    .addAction(R.drawable.ic_message_black_24dp, context.getString(R.string.wear_message_title), pendingMsg);
         }
+        mNotifyBuilder.extend(wearableExtender);
 
         mNotificationManager.notify(notifyId, mNotifyBuilder.build());
     }
@@ -262,16 +284,16 @@ public class Alarm {
         }
     }
 
-    public void alarmSnooze(long durationMs) {
+    public void alarmSnooze(Duration when) {
         if (preferences.getAlarmStrategy() <= 1) {
             return;
         }
         String key = "snooze_" + previousAlarmResults.severity.name();
         if (BuildConfig.DEBUG) {
-            Log.d("snooze", "Setting snooze until: " + new DateTime().getMillis() + durationMs);
+            Log.d("snooze", "Setting snooze until: " + new DateTime().getMillis() + when.getMillis());
         }
-        sharedPreferences.edit().putLong(key, new DateTime().getMillis() + durationMs).apply();
-        showNotification(previousAlarmResults.severity, previousAlarmResults.title, previousAlarmResults.message);
+        sharedPreferences.edit().putLong(key, new DateTime().getMillis() + when.getMillis()).apply();
+        showNotification(previousAlarmResults.severity, previousAlarmResults.title, previousAlarmResults.getMessage());
         stopAlert();
     }
 

@@ -1,44 +1,9 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:paddingLeft="@dimen/activity_vertical_margin"
     android:paddingRight="@dimen/activity_vertical_margin">
-
-    <WebView
-        android:id="@+id/webView"
-        android:layout_width="wrap_content"
-        android:layout_height="match_parent"
-        android:layout_alignParentBottom="false"
-        android:layout_alignParentEnd="true"
-        android:layout_alignParentLeft="true"
-        android:layout_alignParentRight="true"
-        android:layout_alignParentStart="true"
-        android:layout_below="@+id/sgValue"
-        android:layout_marginBottom="45dp"
-        android:layout_marginTop="25dp"
-        android:clickable="false" />
-
-    <TextView
-        android:id="@+id/sgValue"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:layout_alignParentEnd="false"
-        android:layout_alignParentLeft="false"
-        android:layout_alignParentRight="false"
-        android:layout_alignParentStart="false"
-        android:layout_toEndOf="@+id/syncButton"
-        android:layout_toLeftOf="@+id/usbButton"
-        android:layout_toRightOf="@+id/syncButton"
-        android:layout_toStartOf="@+id/usbButton"
-        android:gravity="center|center_vertical|center_horizontal"
-        android:singleLine="true"
-        android:text="@string/unknown_values"
-        android:textAppearance="?android:attr/textAppearanceLarge"
-        android:textColor="#FFFFFF"
-        android:textSize="85sp"
-        tools:ignore="ContentDescription" />
 
     <ImageButton
         android:id="@+id/syncButton"
@@ -49,7 +14,110 @@
         android:layout_alignParentTop="true"
         android:adjustViewBounds="false"
         android:background="@drawable/ic_idlecloud"
-        android:baselineAlignBottom="false" />
+        android:baselineAlignBottom="false"
+        android:contentDescription="@string/sync_button_description" />
+
+    <WebView
+        android:id="@+id/webView"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_alignParentBottom="false"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentRight="true"
+        android:layout_alignParentStart="true"
+        android:layout_marginBottom="45dp"
+        android:layout_marginTop="90dp"
+        android:clickable="false"
+        android:longClickable="false" />
+
+    <TableLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_toEndOf="@+id/syncButton"
+        android:layout_toLeftOf="@+id/usbButton"
+        android:layout_toRightOf="@+id/syncButton"
+        android:layout_toStartOf="@+id/usbButton">
+
+        <TableRow
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="fill_parent"
+                android:layout_weight="20"
+                android:orientation="horizontal">
+
+                <include
+                    android:id="@+id/rawIsig"
+                    layout="@layout/pillbox_vertical_layout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/sgValue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_weight="2"
+                    android:gravity="center|center_vertical|center_horizontal"
+                    android:singleLine="true"
+                    android:text="@string/unknown_values"
+                    android:textAppearance="?android:attr/textAppearanceLarge"
+                    android:textColor="#FFFFFF"
+                    android:textSize="60dp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/trendView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center|center_vertical|center_horizontal"
+                    android:singleLine="true"
+                    android:textAppearance="?android:attr/textAppearanceLarge"
+                    android:textColor="#FFFFFF"
+                    android:textSize="60dp" />
+
+            </LinearLayout>
+        </TableRow>
+
+        <TableRow
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <RelativeLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_weight="1"
+                android:gravity="center_vertical|center_horizontal">
+
+                <include
+                    android:id="@+id/minago"
+                    layout="@layout/pillbox_horizontal_layout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentStart="false"
+                    android:layout_marginEnd="15dp"
+                    android:layout_marginRight="15dp" />
+
+                <include
+                    android:id="@+id/deltapill"
+                    layout="@layout/pillbox_horizontal_layout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentEnd="false"
+                    android:layout_marginLeft="15dp"
+                    android:layout_marginStart="15dp"
+                    android:layout_toEndOf="@+id/minago"
+                    android:layout_toRightOf="@+id/minago" />
+            </RelativeLayout>
+        </TableRow>
+    </TableLayout>
 
     <ImageButton
         android:id="@+id/usbButton"
@@ -58,21 +126,8 @@
         android:layout_alignParentEnd="true"
         android:layout_alignParentRight="true"
         android:layout_alignParentTop="true"
-        android:background="@drawable/ic_nousb" />
-
-    <include
-        android:id="@+id/rawIsig"
-        layout="@layout/pillbox_vertical_layout"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentBottom="false"
-        android:layout_alignParentEnd="false"
-        android:layout_alignParentLeft="false"
-        android:layout_alignParentRight="false"
-        android:layout_alignParentStart="false"
-        android:layout_alignParentTop="false"
-        android:layout_alignWithParentIfMissing="false"
-        android:layout_below="@+id/syncButton" />
+        android:background="@drawable/ic_nousb"
+        android:contentDescription="@string/usb_button_description" />
 
     <include
         android:id="@+id/ulbat"
@@ -96,30 +151,5 @@
         android:layout_alignParentLeft="false"
         android:layout_alignParentRight="true"
         android:layout_alignParentStart="false" />
-
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/sgValue"
-        android:layout_centerInParent="true"
-        android:orientation="horizontal">
-
-        <include
-            android:id="@+id/minago"
-            layout="@layout/pillbox_horizontal_layout"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="10dp"
-            android:layout_marginRight="10dp" />
-
-        <include
-            android:id="@+id/deltapill"
-            layout="@layout/pillbox_horizontal_layout"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginLeft="10dp"
-            android:layout_marginStart="10dp" />
-    </LinearLayout>
-
 
 </RelativeLayout>

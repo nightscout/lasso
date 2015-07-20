@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Paint;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v4.content.LocalBroadcastManager;
@@ -19,7 +20,7 @@ import android.webkit.WebView;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
-import com.nightscout.core.dexcom.TrendArrow;
+import com.nightscout.core.dexcom.Utils;
 import com.nightscout.core.dexcom.records.CalRecord;
 import com.nightscout.core.dexcom.records.EGVRecord;
 import com.nightscout.core.dexcom.records.SensorRecord;
@@ -40,6 +41,7 @@ import org.joda.time.format.PeriodFormatter;
 import org.joda.time.format.PeriodFormatterBuilder;
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.nightscout.lasso.alarm.Alarm;
 import org.nightscout.lasso.model.CalibrationDbEntry;
 import org.nightscout.lasso.model.SensorDbEntry;
 import org.nightscout.lasso.model.SgvDbEntry;
@@ -63,7 +65,9 @@ public class MainActivity extends AppCompatActivity {
     @InjectView(R.id.webView)
     WebView mWebView;
     @InjectView(R.id.sgValue)
-    TextView mTextSGV;
+    TextView sgvText;
+    @InjectView(R.id.trendView)
+    TextView trendView;
     @InjectView(R.id.syncButton)
     ImageButton uploadButton;
     @InjectView(R.id.usbButton)
@@ -73,25 +77,25 @@ public class MainActivity extends AppCompatActivity {
     private PillBoxWidget rawPill;
     private PillBoxWidget receiverBatteryPill;
     private PillBoxWidget uploaderBatteryPill;
-    private PillBoxWidget minago;
+    private PillBoxWidget agoPill;
     private NightscoutPreferences preferences;
+    private Menu menu;
 
 
-    private DateTime lastEgv;
+    private Optional<EGVRecord> lastEgv = Optional.absent();
     private Handler mHandler = new Handler();
 
     public Runnable updateTimeAgo = new Runnable() {
         @Override
         public void run() {
-
-            setTimeAgoPill(lastEgv);
-            mHandler.removeCallbacks(updateTimeAgo);
             long delay = Seconds.seconds(30).toStandardDuration().getMillis();
-            if (lastEgv != null) {
-                long delta = Instant.now().getMillis() - lastEgv.getMillis();
+            if (lastEgv.isPresent()) {
+                setTimeAgoPill(lastEgv.get().getWallTime());
+                mHandler.removeCallbacks(updateTimeAgo);
+                long delta = Instant.now().getMillis() - lastEgv.get().getWallTime().getMillis();
                 delay = delta % standardMinutes(1).getMillis();
-                Log.w("Delay", "Delay: " + delay);
-                Log.w("Delay", "Delta: " + delta);
+                Log.d("Delay", "Delay: " + delay);
+                Log.d("Delay", "Delta: " + delta);
             }
             mHandler.postDelayed(updateTimeAgo, delay);
         }
@@ -103,17 +107,17 @@ public class MainActivity extends AppCompatActivity {
             if (intent.getAction().equals(NightscoutMonitor.NEW_READING_ACTION)) {
                 int uploaderBattery = Optional.fromNullable(intent.getExtras().getInt("uploaderBattery")).or(-1);
                 int receiverBattery = Optional.fromNullable(intent.getExtras().getInt("receiverBattery")).or(-1);
+                // Fill the graph with data
                 List<EGVRecord> egvRecords = SgvDbEntry.getLastEgvRecords(new DateTime().minus(Hours.hours(4)));
-                updateView(egvRecords, uploaderBattery, receiverBattery);
+                if (egvRecords.size() > 0){
+                    updateView(egvRecords, uploaderBattery, receiverBattery);
+                }
             } else if (intent.getAction().equals(NightscoutMonitor.RECEIVER_STATE_INTENT)) {
                 Optional<String> receiverStatus = Optional.fromNullable(intent.getExtras().getString("state"));
-                if (receiverStatus.isPresent()) {
-                    Log.d("StateReceiver", "Received state: " + receiverStatus.get());
-                    if (receiverStatus.get().equals(ReceiverStatus.RECEIVER_CONNECTED.name())) {
-                        receiverButton.setBackgroundResource(R.drawable.ic_usb);
-                    } else {
-                        receiverButton.setBackgroundResource(R.drawable.ic_nousb);
-                    }
+                if (receiverStatus.isPresent() & receiverStatus.get().equals(ReceiverStatus.RECEIVER_CONNECTED.name())) {
+                    receiverButton.setBackgroundResource(R.drawable.ic_usb);
+                } else {
+                    receiverButton.setBackgroundResource(R.drawable.ic_nousb);
                 }
             } else if (intent.getAction().equals(NightscoutMonitor.MQTT_RESPONSE_STATUS_INTENT)) {
                 int res = (intent.getExtras().getBoolean(NightscoutMonitor.MQTT_STATUS_EXTRA_FIELD)) ? R.drawable.ic_cloud : R.drawable.ic_nocloud;
@@ -122,11 +126,10 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Log.d("onCreate", "Created");
+        Log.d("MainActivity", "Created");
         setContentView(R.layout.activity_main);
         ButterKnife.inject(this);
         Intent intent = new Intent(this, NightscoutMonitor.class);
@@ -136,9 +139,34 @@ public class MainActivity extends AppCompatActivity {
         intentFilter.addAction(NightscoutMonitor.MQTT_RESPONSE_STATUS_INTENT);
         broadcastManager.registerReceiver(broadcastReceiver, intentFilter);
 
-        if (SgvDbEntry.getLastEgv().isPresent()) {
-            lastEgv = SgvDbEntry.getLastEgv().get().getWallTime();
+        setupChart();
+
+        if (SgvDbEntry.getLastEgv(Alarm.ALARM_TIMEAGO_WARN_MINS).isPresent()) {
+            lastEgv = Optional.of(SgvDbEntry.getLastEgv().get());
         }
+        preferences = new AndroidPreferences(getApplicationContext());
+
+        receiverBatteryPill = new PillBoxWidget(R.id.rcbat);
+        receiverBatteryPill.update("RB", "??");
+        uploaderBatteryPill = new PillBoxWidget(R.id.ulbat);
+        uploaderBatteryPill.update("UB", "??");
+        agoPill = new PillBoxWidget(R.id.minago);
+        agoPill.updateHeader("ago");
+        agoPill.updateValue("?");
+        rawPill = new PillBoxWidget(R.id.rawIsig);
+        rawPill.updateHeader("Noise");
+        rawPill.updateValue("???");
+//        GlucoseReading initialReading = new GlucoseReading(0,GlucoseUnit.MGDL);
+//        rawPill.updateValue(initialReading, preferences.getPreferredUnits());
+        dPill = new PillBoxWidget(R.id.deltapill);
+        dPill.updateValue("??");
+        dPill.updateHeader(Utils.unitString(preferences.getPreferredUnits()));
+//        dPill.updateValue(initialReading, preferences.getPreferredUnits());
+        startService(intent);
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    public void setupChart(){
         WebSettings webSettings = mWebView.getSettings();
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDatabaseEnabled(true);
@@ -157,23 +185,13 @@ public class MainActivity extends AppCompatActivity {
                 return (event.getAction() == MotionEvent.ACTION_MOVE);
             }
         });
-        receiverBatteryPill = new PillBoxWidget(R.id.rcbat);
-        receiverBatteryPill.update("RB", "??");
-        uploaderBatteryPill = new PillBoxWidget(R.id.ulbat);
-        uploaderBatteryPill.update("UB", "??");
-        minago = new PillBoxWidget(R.id.minago);
-        rawPill = new PillBoxWidget(R.id.rawIsig);
-        rawPill.update("Raw", "Noise");
-        preferences = new AndroidPreferences(getApplicationContext());
-        dPill = new PillBoxWidget(R.id.deltapill);
-        dPill.update(preferredUnitsString(preferences.getPreferredUnits()), "??");
-        startService(intent);
     }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_main, menu);
+        this.menu = menu;
         return true;
     }
 
@@ -189,8 +207,29 @@ public class MainActivity extends AppCompatActivity {
             Intent intent = new Intent(this, SettingsActivity.class);
             startActivity(intent);
             return true;
+        } else if (id == R.id.service_start) {
+            Intent serviceIntent = new Intent(getApplicationContext(), NightscoutMonitor.class);
+            if (!((Lasso) getApplication()).isServiceStarted()){
+                Log.d("ServiceControl", "Starting service");
+                menu.findItem(R.id.service_start).setVisible(false);
+                menu.findItem(R.id.service_stop).setVisible(true);
+                startService(serviceIntent);
+            } else {
+                menu.findItem(R.id.service_start).setVisible(false);
+                menu.findItem(R.id.service_stop).setVisible(true);
+            }
+        } else if (id == R.id.service_stop) {
+            Intent serviceIntent = new Intent(getApplicationContext(), NightscoutMonitor.class);
+            if (((Lasso) getApplication()).isServiceStarted()) {
+                Log.d("ServiceControl", "Starting service");
+                menu.findItem(R.id.service_start).setVisible(true);
+                menu.findItem(R.id.service_stop).setVisible(false);
+                stopService(serviceIntent);
+            } else {
+                menu.findItem(R.id.service_start).setVisible(true);
+                menu.findItem(R.id.service_stop).setVisible(false);
+            }
         }
-
         return super.onOptionsItemSelected(item);
     }
 
@@ -218,12 +257,13 @@ public class MainActivity extends AppCompatActivity {
         if (m.find()) {
             String number = m.group(1);
             String ago = m.group(2);
-            minago.update(ago, number);
+            agoPill.update(ago, number);
         }
     }
 
     @Override
     public void onPause() {
+        Log.d("MainActivity", "Paused");
         mWebView.pauseTimers();
         mWebView.onPause();
         mHandler.removeCallbacks(updateTimeAgo);
@@ -232,51 +272,72 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onResume() {
-        Log.d("onResume", "Resumed");
+        Log.d("MainActivity", "Resumed");
         mWebView.onResume();
         mWebView.resumeTimers();
-//        List<EGVRecord> egvRecords = SgvDbEntry.getLastEgvRecords(new DateTime().minus(Hours.hours(4)));
-//        Log.d("onResume", "Number of records => " + egvRecords.size());
-        dPill.restoreView();
-        rawPill.restoreView();
+        NightscoutMonitor.queryMqttStatusAsync(getApplicationContext());
+        GlucoseUnit unit = preferences.getPreferredUnits();
+        dPill.restoreView(unit);
+        rawPill.restoreView(unit, false);
         receiverBatteryPill.restoreView();
         uploaderBatteryPill.restoreView();
-        rawPill.restoreView();
+        restoreSgvText();
         mHandler.post(updateTimeAgo);
         super.onResume();
     }
 
     @Override
     protected void onStart() {
-        Log.d("onStart", "Started");
+        Log.d("MainActivity", "Started");
         super.onStart();
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        Log.d("onStop", "Stopped");
+        Log.d("MainActivity", "Stopped");
     }
 
     @Override
     protected void onDestroy() {
         LocalBroadcastManager.getInstance(this).unregisterReceiver(broadcastReceiver);
+        Log.d("MainActivity", "Destroyed");
         super.onDestroy();
     }
 
 
     private void updateView(List<EGVRecord> egvRecords, int uploaderBattery, int receiverBattery) {
-        receiverBatteryPill.update(String.valueOf(receiverBattery));
-        uploaderBatteryPill.update(String.valueOf(uploaderBattery));
+        updateBatteries(uploaderBattery, receiverBattery);
+        updateSgv(egvRecords);
+        updateChart(egvRecords);
+        updateDeltaPill(lastEgv.get(), egvRecords.get(egvRecords.size() - 2));
+        updateRawPill(egvRecords);
+    }
 
-        Log.d("message receiver", "Battery: " + uploaderBattery);
+    private void updateSgv(List<EGVRecord> egvRecords){
+        if (egvRecords.size() > 0) {
+            lastEgv = Optional.of(egvRecords.get(egvRecords.size() - 1));
+            if (lastEgv.isPresent()) {
+                setTimeAgoPill(lastEgv.get().getWallTime());
+            }
+            setSgvText(lastEgv.get().getReading());
+            this.trendView.setText(lastEgv.get().getTrend().symbol());
+            if (new DateTime().minus(Alarm.ALARM_TIMEAGO_WARN_MINS).isAfter(lastEgv.get().getWallTime())) {
+                this.sgvText.setPaintFlags(this.sgvText.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
+            } else {
+                this.sgvText.setPaintFlags(this.sgvText.getPaintFlags() & (~ Paint.STRIKE_THRU_TEXT_FLAG));
+            }
+        }
+    }
 
-        lastEgv = egvRecords.get(egvRecords.size() - 1).getWallTime();
-        setTimeAgoPill(lastEgv);
+    private void updateBatteries(int uploaderBattery, int receiverBattery){
+        receiverBatteryPill.updateValue(String.valueOf(receiverBattery));
+        Log.d("Battery", "Receiver Battery: " + receiverBattery);
+        uploaderBatteryPill.updateValue(String.valueOf(uploaderBattery));
+        Log.d("Battery", "Uploader Battery: " + uploaderBattery);
+    }
 
-        String sgvText = getSGVStringByUnit(egvRecords.get(egvRecords.size() - 1).getReading(), egvRecords.get(egvRecords.size() - 1).getTrend());
-        mTextSGV.setText(sgvText);
-
+    private void updateChart(List<EGVRecord> egvRecords){
         JSONArray array = new JSONArray();
         for (EGVRecord record : egvRecords) {
             try {
@@ -287,48 +348,60 @@ public class MainActivity extends AppCompatActivity {
         }
         Log.e("MainActivity", "Json array " + array);
         mWebView.loadUrl("javascript:updateData(" + array + ")");
+    }
 
-        // TODO - Moved watchmaker integration from this activity to the service to ensure that new updates will be pushed regardless of whether
-        // or not the activity is running so long as the service is active.
+    private void updateDeltaPill(EGVRecord record1, EGVRecord record2){
         String delta = "None";
-        if (egvRecords.size() > 2) {
-            GlucoseReading glucoseDelta = egvRecords.get(egvRecords.size() - 1).getReading().subtract(egvRecords.get(egvRecords.size() - 2).getReading());
+            GlucoseReading glucoseDelta = record1.getReading().subtract(record2.getReading());
             DecimalFormat fmt;
             if (preferences.getPreferredUnits() == GlucoseUnit.MGDL) {
                 fmt = new DecimalFormat("+#,##0;-#");
             } else {
                 fmt = new DecimalFormat("+#,##0.0;-#");
             }
-            if (egvRecords.get(egvRecords.size() - 2).getReading().asMgdl() > 38 && egvRecords.get(egvRecords.size() - 2).getReading().asMgdl() > 38) {
+            if (record1.getReading().asMgdl() > 38 && record2.getReading().asMgdl() > 38) {
                 delta = fmt.format(glucoseDelta.as(preferences.getPreferredUnits()));
             }
-        }
-        dPill.update(preferredUnitsString(preferences.getPreferredUnits()), String.valueOf(delta));
+        Log.d("DELTA", "Delta: "+delta);
+        dPill.updateValue(glucoseDelta, preferences.getPreferredUnits());
+    }
 
+    private void updateRawPill(List<EGVRecord> egvRecords){
         Optional<CalRecord> lastCal = CalibrationDbEntry.getLastCal();
         Optional<SensorRecord> lastSensor = SensorDbEntry.getLastSensor();
-        EGVRecord lastEgv = egvRecords.get(egvRecords.size() - 1);
         IsigReading isigReading = new IsigReading();
-        if (lastCal.isPresent() && lastSensor.isPresent() && Math.abs(lastEgv.getSystemTime().getMillis() - lastSensor.get().getSystemTime().getMillis()) < Seconds.seconds(10).toStandardDuration().getMillis()) {
-            isigReading = new IsigReading(lastSensor.get(), lastCal.get(), egvRecords.get(egvRecords.size() - 1));
-            Log.e("isig", "iSig reading: " + isigReading.asMgdlStr());
-        } else {
-            Log.w("isig", "Problem matching sensor to egv for isig calculation");
-            Log.w("isig", "Last egv: " + lastEgv.getSystemTime().getMillis());
-            Log.w("isig", "Last sensor: " + lastSensor.get().getSystemTime().getMillis());
+        if (lastEgv.isPresent()) {
+            if (lastCal.isPresent() && lastSensor.isPresent() && Math.abs(lastEgv.get().getSystemTime().getMillis() - lastSensor.get().getSystemTime().getMillis()) < Seconds.seconds(10).toStandardDuration().getMillis()) {
+                isigReading = new IsigReading(lastSensor.get(), lastCal.get(), egvRecords.get(egvRecords.size() - 1));
+                Log.e("isig", "iSig reading: " + isigReading.asMgdlStr());
+            } else {
+                Log.w("isig", "Problem matching sensor to egv for isig calculation");
+                Log.w("isig", "Last egv: " + lastEgv.get().getSystemTime().getMillis());
+                Log.w("isig", "Last sensor: " + lastSensor.get().getSystemTime().getMillis());
+            }
+            rawPill.update(lastEgv.get().getNoiseMode().name(), isigReading, preferences.getPreferredUnits());
         }
-        rawPill.update(egvRecords.get(egvRecords.size() - 1).getNoiseMode().name(), isigReading.asStr(preferences.getPreferredUnits()));
+    }
+
+    private void setSgvText(GlucoseReading reading){
+        sgvText.setText(getSgvOrMessage(reading));
+        sgvText.setTag(R.id.sgv_value, reading.asMgdl());
+    }
+
+    private void restoreSgvText() {
+        if (sgvText.getTag(R.id.sgv_value) != null) {
+            GlucoseReading reading = new GlucoseReading((int) sgvText.getTag(R.id.sgv_value), GlucoseUnit.MGDL);
+            sgvText.setText(getSgvOrMessage(reading));
+        }
     }
 
     private String preferredUnitsString(GlucoseUnit units) {
         return (units == GlucoseUnit.MGDL ? "mg/dL" : "mmoL");
     }
 
-    private String getSGVStringByUnit(GlucoseReading sgv, TrendArrow trend) {
+    private String getSgvOrMessage(GlucoseReading sgv) {
         String sgvStr = sgv.asStr(preferences.getPreferredUnits());
-        return (sgv.asMgdl() != -1) ?
-                (isSpecialValue(sgv)) ?
-                        getEGVSpecialValue(sgv).get().toString() : sgvStr + " " + trend.symbol() : "---";
+        return (isSpecialValue(sgv)) ? getEGVSpecialValue(sgv).get().toString() : sgvStr;
     }
 
 
@@ -341,12 +414,22 @@ public class MainActivity extends AppCompatActivity {
 
         public void update(String header, String value) {
             updateHeader(header);
-            update(value);
+            updateValue(value);
         }
 
-        public void update(String value) {
-            ((TextView) view.findViewById(R.id.pillvalue)).setText(value);
-            view.setTag(R.id.pillvalue, value);
+        public void updateValue(String value) {
+            ((TextView) view.findViewById(R.id.sgv_value)).setText(value);
+            view.setTag(R.string.pill_text, value);
+        }
+
+        public void update(String header, GlucoseReading reading, GlucoseUnit unit) {
+            updateValue(reading, unit);
+            updateHeader(header);
+        }
+
+        public void updateValue(GlucoseReading reading, GlucoseUnit unit) {
+            ((TextView) view.findViewById(R.id.sgv_value)).setText(reading.asStr(unit));
+            view.setTag(R.id.sgv_value, reading.asMgdl());
         }
 
         public void updateHeader(String header) {
@@ -355,16 +438,34 @@ public class MainActivity extends AppCompatActivity {
         }
 
         public void restoreView() {
-            ((TextView) view.findViewById(R.id.pillvalue)).setText((String) view.getTag(R.id.pillvalue));
-            ((TextView) view.findViewById(R.id.heading)).setText((String) view.getTag(R.id.heading));
+            restoreHeader();
+            restoreValue();
         }
 
-        public void restoreViewWithConversion() {
-            Integer val = Integer.valueOf((String) view.getTag(R.id.pillvalue));
-            GlucoseReading glucoseReading = new GlucoseReading(val, GlucoseUnit.MGDL);
-            ((TextView) view.findViewById(R.id.pillvalue)).setText(glucoseReading.asStr(preferences.getPreferredUnits()));
-            ((TextView) view.findViewById(R.id.heading)).setText((String) view.getTag(R.id.heading));
+        public void restoreView(GlucoseUnit units) {
+            restoreView(units, true);
         }
 
+        public void restoreView(GlucoseUnit units, boolean setHeaderToUnits) {
+            if (setHeaderToUnits) {
+                updateHeader(Utils.unitString(units));
+            }
+            restoreValue(units);
+        }
+
+        private void restoreHeader() {
+            updateHeader((String) view.getTag(R.id.heading));
+        }
+
+        public void restoreValue() {
+            updateValue((String) view.getTag(R.string.pill_text));
+        }
+
+        public void restoreValue(GlucoseUnit unit) {
+            if (view.getTag(R.id.sgv_value) != null) {
+                String reading = new GlucoseReading((int) view.getTag(R.id.sgv_value), GlucoseUnit.MGDL).asStr(unit);
+                ((TextView) view.findViewById(R.id.sgv_value)).setText(reading);
+            }
+        }
     }
 }

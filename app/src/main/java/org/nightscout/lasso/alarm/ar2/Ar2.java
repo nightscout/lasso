@@ -3,13 +3,18 @@ package org.nightscout.lasso.alarm.ar2;
 import android.content.Context;
 import android.util.Log;
 
+import com.nightscout.core.dexcom.Constants;
+import com.nightscout.core.dexcom.SpecialValue;
 import com.nightscout.core.dexcom.records.EGVRecord;
 import com.nightscout.core.model.GlucoseUnit;
+
+import net.tribe7.common.base.Optional;
 
 import org.joda.time.DateTime;
 import org.joda.time.Hours;
 import org.joda.time.Minutes;
 import org.nightscout.lasso.BuildConfig;
+import org.nightscout.lasso.NightscoutMonitor;
 import org.nightscout.lasso.R;
 import org.nightscout.lasso.alarm.AlarmResults;
 import org.nightscout.lasso.alarm.AlarmSeverity;
@@ -79,26 +84,39 @@ public class Ar2 implements AlarmStrategy {
     @Override
     public AlarmResults analyze(List<EGVRecord> egvRecords, GlucoseUnit unit) {
         if (egvRecords.size() == 0) {
-            throw new IllegalArgumentException("No records to analyze");
+            return new AlarmResults(context.getString(R.string.no_data_title, AlarmSeverity.WARNING.name()), AlarmSeverity.WARNING, context.getString(R.string.no_data_message, NightscoutMonitor.ANALYSIS_DURATION.getStandardMinutes()));
         }
         AlarmResults alarmResults = new AlarmResults();
         EGVRecord lastEgvRecord = egvRecords.get(egvRecords.size() - 1);
-        Ar2Result ar2Results = forecast(egvRecords);
-        alarmResults.message = context.getString(R.string.alarm_notification_urgent_body,
-                lastEgvRecord.getReading().asStr(unit),
-                lastEgvRecord.getTrend().symbol());
-        if (ar2Results.avgLoss > URGENT_THRESHOLD) {
-            Log.w("Alarm", "Urgent alarm");
-            alarmResults.severity = AlarmSeverity.URGENT;
-            alarmResults.title = context.getString(R.string.alarm_notification_urgent_title, context.getString(R.string.app_name));
-        } else if (ar2Results.avgLoss > WARN_THRESHOLD) {
-            Log.w("Alarm", "Warning");
-            alarmResults.severity = AlarmSeverity.WARNING;
-            alarmResults.title = context.getString(R.string.alarm_notification_warning_title, context.getString(R.string.app_name));
+        Optional<String> specialValueMessage = SpecialValue.getSpecialValueDescr(lastEgvRecord.getBgMgdl());
+        if (specialValueMessage.isPresent()) {
+            if (lastEgvRecord.getBgMgdl() == Constants.MAX_EGV || lastEgvRecord.getBgMgdl() == Constants.MIN_EGV) {
+                alarmResults.setTitle(context.getString(R.string.alarm_notification_urgent_title, context.getString(R.string.app_name)));
+                alarmResults.setSeverityAtHighest(AlarmSeverity.URGENT);
+            } else {
+                alarmResults.setTitle(context.getString(R.string.alarm_notification_normal_body, context.getString(R.string.app_name)));
+                alarmResults.setSeverityAtHighest(AlarmSeverity.NORMAL);
+            }
+            alarmResults.addMessage(specialValueMessage.get());
+            return alarmResults;
         } else {
-            Log.w("Alarm", "All is good");
-            alarmResults.severity = AlarmSeverity.NONE;
-            alarmResults.title = context.getString(R.string.alarm_notification_normal_title, context.getString(R.string.app_name));
+            Ar2Result ar2Results = forecast(egvRecords);
+            alarmResults.addMessage(context.getString(R.string.alarm_notification_urgent_body,
+                    lastEgvRecord.getReading().asStr(unit),
+                    lastEgvRecord.getTrend().symbol()));
+            if (ar2Results.avgLoss > URGENT_THRESHOLD) {
+                Log.w("Alarm", "Urgent alarm");
+                alarmResults.setSeverityAtHighest(AlarmSeverity.URGENT);
+                alarmResults.setTitle(context.getString(R.string.alarm_notification_urgent_title, context.getString(R.string.app_name)));
+            } else if (ar2Results.avgLoss > WARN_THRESHOLD) {
+                Log.w("Alarm", "Warning");
+                alarmResults.setSeverityAtHighest(AlarmSeverity.WARNING);
+                alarmResults.setTitle(context.getString(R.string.alarm_notification_warning_title, context.getString(R.string.app_name)));
+            } else {
+                Log.w("Alarm", "All is good");
+                alarmResults.setSeverityAtHighest(AlarmSeverity.NONE);
+                alarmResults.setTitle(context.getString(R.string.alarm_notification_normal_title, context.getString(R.string.app_name)));
+            }
         }
         return alarmResults;
 

@@ -1,6 +1,7 @@
 package org.nightscout.lasso.alarm;
 
 import android.content.Context;
+import android.util.Log;
 
 import com.nightscout.core.preferences.NightscoutPreferences;
 
@@ -35,11 +36,8 @@ public class AlarmStrategyModule {
         NightscoutPreferences preferences = new AndroidPreferences(context);
         AlarmStrategy strategy;
         switch (preferences.getAlarmStrategy()) {
-            case 0:
-            case 1:
-                strategy = new NoopAlarm();
-                break;
             case 2:
+                Log.d("AlarmStrategy", "Creating Simple alarm");
                 strategy = new SimpleAlarm(context);
                 ((SimpleAlarm) strategy).setUrgentHighThreshold(preferences.getUrgentHighThreshold());
                 ((SimpleAlarm) strategy).setWarningHighThreshold(preferences.getWarningHighThreshold());
@@ -47,9 +45,11 @@ public class AlarmStrategyModule {
                 ((SimpleAlarm) strategy).setWarningLowThreshold(preferences.getWarningLowThreshold());
                 break;
             case 3:
+                Log.d("AlarmStrategy", "Creating AR2 alarm");
                 strategy = new Ar2(context);
                 break;
             default:
+                Log.d("AlarmStrategy", "Creating noop alarm");
                 strategy = new NoopAlarm();
         }
         return strategy;
