@@ -94,7 +94,7 @@ public class NightscoutMonitor extends Service implements MqttMgrObserver {
     public static final Duration MISSED_DATA_URGENT_AGE = Seconds.seconds(20).toStandardDuration().plus(Minutes.minutes(30).toStandardDuration());
     public static final Duration ALARM_SNOOZE_DEFAULT_DURATION = Minutes.minutes(30).toStandardDuration().plus(Seconds.seconds(10).toStandardDuration());
     public static final Duration ANALYSIS_DURATION = Minutes.minutes(90).toStandardDuration();
-    private static final String MQTT_PROTO_DOWNLOAD_TOPIC = "/downloads/protobuf";
+    private static final String MQTT_PROTO_DOWNLOAD_TOPIC = "/downloads/%s/protobuf";
     private static final String MQTT_JSON_NOTIFICATIONS_TOPIC = "/notifications/json";
     private static final String MISSED_DOWNLOAD_SEVERITY_EXTRA = "severity";
     private static final String MISSED_DOWNLOAD_AGE_EXTRA = "dataage";
@@ -225,7 +225,7 @@ public class NightscoutMonitor extends Service implements MqttMgrObserver {
         // FIXME - hack to get the app to start up
         if (mqttManager != null) {
             mqttManager.registerObserver(this);
-            mqttManager.subscribe(2, MQTT_PROTO_DOWNLOAD_TOPIC);
+            mqttManager.subscribe(2, String.format(MQTT_PROTO_DOWNLOAD_TOPIC, preferences.getMqttUser()));
             if (preferences.getAlarmStrategy() == 0) {
                 Log.d(TAG, "Subscribing to notifications");
                 mqttManager.subscribe(0, MQTT_JSON_NOTIFICATIONS_TOPIC);
@@ -316,7 +316,7 @@ public class NightscoutMonitor extends Service implements MqttMgrObserver {
             } catch (JSONException e) {
                 e.printStackTrace();
             }
-        } else if (topic.equals(MQTT_PROTO_DOWNLOAD_TOPIC)) {
+        } else if (topic.equals(String.format(MQTT_PROTO_DOWNLOAD_TOPIC, preferences.getMqttUser()))) {
 //            cancelMissedAlarm();
             messageCount += 1;
             Wire wire = new Wire();
